@@ -30,6 +30,8 @@ if (HAS_INLINE_FUNCTIONS)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -finline-functions")
 endif()
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+
 set(CMAKE_LINKER_NAME ld CACHE STRING "Name of the binutils linker")
 mark_as_advanced(CMAKE_LINKER_NAME)
 
