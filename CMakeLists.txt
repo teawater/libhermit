@@ -7,6 +7,8 @@ project (HermitCore)
 
 ### Kernel
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g")
+
 # generate config files
 add_subdirectory(include/hermit)
 
