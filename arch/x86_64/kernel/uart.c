@@ -198,8 +198,8 @@ int uart_init(void)
 	if (is_uhyve())
 		return 0;
 
-	if (uartport)
-		return uart_config();
+	/*if (uartport)
+		return uart_config();*/
 
 	pci_info_t pci_info;
 	uint32_t bar = 0;
