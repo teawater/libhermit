@@ -167,8 +167,9 @@ int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsyst
 		for (slot = 0; slot < MAX_SLOTS; slot++) {
 			if (adapters[bus][slot] != -1) {
 				if (((adapters[bus][slot] & 0xffff) == vendor_id) &&
-				   (((adapters[bus][slot] & 0xffff0000) >> 16) == device_id) &&
-				   (((pci_subid(bus, slot) >> 16) & subsystem_id) == subsystem_id)) {
+				    (((adapters[bus][slot] & 0xffff0000) >> 16) == device_id)) {
+					if (subsystem_id != PCI_IGNORE_SUBID && pci_subid(bus, slot) != subsystem_id)
+						continue;
 					for(i=0; i<6; i++) {
 						info->base[i] = pci_what_iobase(bus, slot, i);
 						info->size[i] = (info->base[i]) ? pci_what_size(bus, slot, i) : 0;
@@ -201,9 +202,10 @@ int print_pci_adapters(void)
 
 		if (adapters[bus][slot] != -1) {
 				counter++;
-				LOG_INFO("%d) Vendor ID: 0x%x  Device Id: 0x%x\n",
+				uint32_t csid = pci_subid(bus, slot);
+				LOG_INFO("%d) Vendor ID: 0x%x  Device ID: 0x%x Subsystem Vendor ID: 0x%x Subsystem Device ID: 0x%x\n",
 					counter, adapters[bus][slot] & 0xffff,
-					(adapters[bus][slot] & 0xffff0000) >> 16);
+					(adapters[bus][slot] & 0xffff0000) >> 16, csid & 0xffff, csid >> 16);
 
 #ifdef WITH_PCI_IDS
 				for (i=0; i<PCI_VENTABLE_LEN; i++) {

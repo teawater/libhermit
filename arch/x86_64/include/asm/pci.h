@@ -58,7 +58,7 @@ int pci_init(void);
  *
  * @param vendor_id The device's vendor ID
  * @param device_id The device's ID
- * @param subystem_id The subsystem DI
+ * @param subystem_id The subsystem ID (subsystem_device_id << 16 | subsystem_vendor_id)
  * @param info Pointer to the record pci_info_t where among other the IObase address will be stored
  * @param enable_bus_master If true, the bus mastering will be enabled.
  *
