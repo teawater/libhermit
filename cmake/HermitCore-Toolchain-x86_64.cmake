@@ -6,7 +6,7 @@ set_default(TOOLCHAIN_BIN_DIR /opt/hermit/bin)
 
 set(TARGET_ARCH x86_64-hermit)
 set(HERMIT_KERNEL_FLAGS
-					-m64 -Wall -O2 -mno-red-zone
+					-m64 -Wall -mno-red-zone
 					-fno-var-tracking-assignments -fstrength-reduce
 					-fomit-frame-pointer -finline-functions -ffreestanding
 					-nostdinc -fno-stack-protector -mno-sse -mno-mmx
@@ -17,6 +17,9 @@ set(HERMIT_KERNEL_FLAGS
 					-fno-common -Wframe-larger-than=1024
 					-fno-strict-aliasing -fno-asynchronous-unwind-tables
 					-fno-strict-overflow -maccumulate-outgoing-args)
+if(NOT DEFINED DEBUG)
+set(HERMIT_KERNEL_FLAGS -O2 ${HERMIT_KERNEL_FLAGS})
+endif()
 
 set(HERMIT_APP_FLAGS
 					-m64 -mtls-direct-seg-refs -O3 -ftree-vectorize)
