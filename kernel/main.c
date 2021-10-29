@@ -161,6 +161,8 @@ static int init_netifs(void)
 	LOG_INFO("TCP/IP initialized.\n");
 	sys_sem_free(&sem);
 
+	virtio_console_init();
+
 	if (is_uhyve()) {
 		LOG_INFO("HermitCore is running on uhyve!\n");
 		if (uhyve_net_stat()) {
