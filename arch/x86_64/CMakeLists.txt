@@ -57,10 +57,11 @@ endforeach()
 
 file(GLOB KERNEL_SOURCES	"kernel/*.c")
 file(GLOB MM_SOURCES		"mm/*.c")
+file(GLOB VIRTIO_SOURCES	"virtio/*.c")
 
 # add boot.h as source to mark dependency boot.asm -> boot.h -> apic.c
 add_library(${X86_KERNEL_C_TARGET} OBJECT
-	${KERNEL_SOURCES} ${MM_SOURCES}
+	${KERNEL_SOURCES} ${MM_SOURCES} ${VIRTIO_SOURCES}
 	${GENERATED_CONFIG_DIR}/hermit/boot.h)
 
 target_include_directories(${X86_KERNEL_C_TARGET} BEFORE
