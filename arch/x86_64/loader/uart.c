@@ -90,7 +90,7 @@
 #define UART_MCR_RTS		0x02 /* RTS complement */
 #define UART_MCR_DTR		0x01 /* DTR complement */
 
-#define DEFAULT_UART_PORT	0 //0xc110
+#define DEFAULT_UART_PORT	0xc050
 
 size_t	uartport = 0;
 
