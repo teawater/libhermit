@@ -78,8 +78,10 @@ typedef struct {
 	char **envp;
 } __attribute__ ((packed)) uhyve_cmdval_t;
 
+#ifndef KATA
 static struct netif	default_netif;
 static const int sobufsize = 131072;
+#endif
 
 /*
  * Note that linker symbols are not variables, they have no memory allocated for
@@ -123,8 +125,9 @@ static int hermit_init(void)
 	// initialize .percore section => copy first section to all other sections
 	for(uint32_t i=1; i<MAX_CORES; i++)
 		memcpy((char*) &percore_start + i*sz, (char*) &percore_start, sz);
-
+#ifndef KATA
 	koutput_init();
+#endif
 
 	system_init();
 	irq_init();
@@ -166,8 +169,6 @@ static int init_netifs(void)
 	sys_sem_wait(&sem);
 	LOG_INFO("TCP/IP initialized.\n");
 	sys_sem_free(&sem);
-
-	virtio_console_init();
 
 	if (is_uhyve()) {
 		LOG_INFO("HermitCore is running on uhyve!\n");
@@ -326,6 +327,23 @@ int libc_start(int argc, char** argv, char** env);
 
 char* itoa(uint64_t input, char* str);
 
+#ifdef KATA
+static int initd(void* arg)
+{
+	// initialized bss section
+	memset((void*)&__bss_start, 0x00, (size_t) &kernel_start + image_size - (size_t) &__bss_start);
+
+	LOG_INFO("KATA is running\n");
+
+#if 0
+	for (int i = 0; 1; i++) {
+		LOG_INFO("KATA is running %d\n", i);
+	}
+#endif
+
+	return 0;
+}
+#else
 // init task => creates all other tasks and initializes the LwIP
 static int initd(void* arg)
 {
@@ -344,9 +362,6 @@ static int initd(void* arg)
 	// initialized bss section
 	memset((void*)&__bss_start, 0x00, (size_t) &kernel_start + image_size - (size_t) &__bss_start);
 
-#ifdef KATA
-	
-#else
 	// setup heap
 	if (!curr_task->heap)
 		curr_task->heap = (vma_t*) kmalloc(sizeof(vma_t));
@@ -577,9 +592,9 @@ out:
 
 	if (s > 0)
 		lwip_close(s);
-#endif
 	return 0;
 }
+#endif
 
 //#define MEASURE_CONTEXT
 
@@ -656,10 +671,18 @@ static int measure_context(void* arg)
 }
 #endif
 
+#ifdef KATA
+extern int virtio_console_init(void);
+#endif
+
 int hermit_main(void)
 {
 	hermit_init();
 	system_calibration(); // enables also interrupts
+#ifdef KATA
+	// Call after system_calibration because system_calibration does some cr3 init work.
+	virtio_console_init();
+#endif
 
 	LOG_INFO("This is Hermit %s, build on %s\n", PACKAGE_VERSION, __DATE__);
 	//LOG_INFO("Isle %d of %d possible isles\n", isle, possible_isles);

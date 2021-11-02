@@ -461,6 +461,7 @@ int kvprintf(char const *fmt, void (*func) (int, void *), void *arg, int radix,
 #undef PCHAR
 }
 
+#ifndef KATA
 /*
  * Print directly a character on the screen
  */
@@ -493,3 +494,4 @@ int kprintf(const char *fmt, ...)
 
 	return ret;
 }
+#endif

@@ -33,7 +33,7 @@ typedef struct {
 	size_t max;
 } sputchar_arg_t;
 
-static void sputchar(int c, void *arg)
+void sputchar(int c, void *arg)
 {
 	sputchar_arg_t *dest = (sputchar_arg_t *) arg;
 
@@ -80,3 +80,37 @@ int ksprintf(char *str, const char *format, ...)
 
 	return ret;
 }
+
+#ifdef KATA
+#include <hermit/spinlock.h>
+
+extern spinlock_irqsave_t virtio_console_output_lock;
+
+#define KPRINTF_BUF_SIZE 1024
+static char kprintf_buf[KPRINTF_BUF_SIZE];
+
+int kprintf(const char *fmt, ...)
+{
+	int ret;
+	va_list ap;
+	sputchar_arg_t dest;
+
+	dest.str = kprintf_buf;
+	dest.pos = 0;
+	dest.max = KPRINTF_BUF_SIZE;
+
+	spinlock_irqsave_lock(&virtio_console_output_lock);
+	va_start(ap, fmt);
+	ret = kvprintf(fmt, sputchar, &dest, 10, ap);
+	va_end(ap);
+
+	kprintf_buf[ret] = 0;
+
+	virtio_console_putchars(kprintf_buf, ret);
+
+	spinlock_irqsave_unlock(&virtio_console_output_lock);
+
+	return ret;
+}
+
+#endif

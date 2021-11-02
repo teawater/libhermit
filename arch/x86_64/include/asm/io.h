@@ -119,6 +119,9 @@ inline static void cmos_write(uint8_t offset, uint8_t val)
 	outportb(CMOS_PORT_DATA, val);
 }
 
+#define iowrite16(d, p)	outportw(p, d)
+#define iowrite32(d, p)	outportl(p, d)
+#define ioread32(p) inportl(p)
 
 #ifdef __cplusplus
 }

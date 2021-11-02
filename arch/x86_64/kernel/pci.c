@@ -45,8 +45,9 @@
 #define	PCI_CFRV	0x08	/* Configuration Revision */
 #define	PCI_CFLT	0x0c	/* Configuration Latency Timer */
 #define	PCI_CBIO	0x10	/* Configuration Base IO Address */
-#define PCI_CSID	0x2C	/* Configuration Subsystem Id & Subsystem Vendor Id */
-#define	PCI_CFIT	0x3c	/* Configuration Interrupt */
+#define PCI_SUBSYSTEM_VENDOR_ID	0x2C	/* Configuration Subsystem Id & Subsystem Vendor Id */
+#define	PCI_INTERRUPT_LINE	0x3c	/* Configuration Interrupt */
+#define	PCI_INTERRUPT_PIN	0x3c
 #define	PCI_CFDA	0x40	/* Configuration Driver Area */
 
 #define PHYS_IO_MEM_START	0
@@ -104,12 +105,12 @@ static uint32_t pci_conf_read(uint32_t bus, uint32_t slot, uint32_t off)
 
 static inline uint32_t pci_subid(uint32_t bus, uint32_t slot)
 {
-	return pci_conf_read(bus, slot, PCI_CSID);
+	return pci_conf_read(bus, slot, PCI_SUBSYSTEM_VENDOR_ID);
 }
 
 static inline uint32_t pci_what_irq(uint32_t bus, uint32_t slot)
 {
-	return pci_conf_read(bus, slot, PCI_CFIT) & 0xFF;
+	return pci_conf_read(bus, slot, PCI_INTERRUPT_LINE) & 0xFF;
 }
 
 static inline uint32_t pci_what_iobase(uint32_t bus, uint32_t slot, uint32_t nr)

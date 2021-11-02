@@ -161,6 +161,39 @@ static inline int isxdigit(int c)
 	return 0;
 }
 
+/**
+ * kmalloc_array - allocate memory for an array.
+ * @n: number of elements.
+ * @size: element size.
+ * @flags: the type of memory to allocate (see kmalloc).
+ */
+static inline void *kmalloc_array(size_t n, size_t size)
+{
+	return kmalloc(n * size);
+}
+
+#define MAX_ERRNO	4095
+#define ERR_PTR(err)    ((void *)((long)(err)))
+#define PTR_ERR(ptr)    ((long)(ptr))
+#define IS_ERR(ptr)     ((unsigned long)(ptr) > (unsigned long)(-MAX_ERRNO))
+
+#ifndef offsetof
+# define offsetof(TYPE, MEMBER)	((size_t)&((TYPE *)0)->MEMBER)
+#endif
+#define container_of(ptr, type, member) ({			\
+	const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
+	(type *)( (char *)__mptr - offsetof(type,member) );})
+
+# ifndef likely
+#  define likely(x)	(__builtin_expect(!!(x), 1))
+# endif
+# ifndef unlikely
+#  define unlikely(x)	(__builtin_expect(!!(x), 0))
+# endif
+
+#define WARN_ON_ONCE(x)
+#define BUG_ON(x)
+
 #ifdef __cplusplus
 }
 #endif

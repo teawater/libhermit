@@ -213,6 +213,34 @@ const char* get_cmdline(void);
 int init_rcce(void);
 void print_cpu_status(int isle);
 
+#ifndef bool
+#define bool int
+#endif
+#ifndef true
+#define true 1
+#endif
+#ifndef false
+#define false 0
+#endif
+#define u16 uint16_t
+#define u32 uint32_t
+#define u64 uint64_t
+#define dma_addr_t uint64_t
+
+/**
+ * enum irqreturn
+ * @IRQ_NONE		interrupt was not from this device or was not handled
+ * @IRQ_HANDLED		interrupt was handled by this device
+ * @IRQ_WAKE_THREAD	handler requests to wake the handler thread
+ */
+enum irqreturn {
+	IRQ_NONE		= (0 << 0),
+	IRQ_HANDLED		= (1 << 0),
+	IRQ_WAKE_THREAD		= (1 << 1),
+};
+
+typedef enum irqreturn irqreturn_t;
+
 #ifdef __cplusplus
 }
 #endif
