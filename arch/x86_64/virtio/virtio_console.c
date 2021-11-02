@@ -25,6 +25,7 @@
  */
 
 #include <hermit/stddef.h>
+#include <hermit/errno.h>
 #include <hermit/stdio.h>
 #include <hermit/string.h>
 #include <hermit/processor.h>
@@ -32,94 +33,16 @@
 #include <hermit/logging.h>
 #include <hermit/virtio_net.h>
 #include <hermit/virtio_ring.h>
-#include <hermit/virtio_pci.h>
+//#include <hermit/virtio_pci.h>
 #include <hermit/virtio_net.h>
 #include <asm/page.h>
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/pci.h>
+#include "virtio.h"
 
 #define VENDOR_ID		0x1AF4
 #define VIRTIO_ID_CONSOLE	3 /* virtio console */
-#define QUEUE_LIMIT		512
-#define VIRTIO_BUFFER_SIZE	2048
-
-#define VIRTIO_CONSOLE_PORT_READY	3
-
-typedef struct
-{
-	struct vring vring;
-	uint64_t virt_buffer;
-	uint64_t phys_buffer;
-	uint16_t last_seen_used;
-} virt_queue_t;
-
-// Use PCI_LEGACY
-static int
-virtio_feature_setup(uint32_t iobase, uint32_t *features)
-{
-	uint8_t status;
-
-	// reset interface
-	outportb(iobase + VIRTIO_PCI_STATUS, 0);
-	// tell the device that we have noticed it
-	outportb(iobase + VIRTIO_PCI_STATUS, VIRTIO_CONFIG_S_ACKNOWLEDGE);
-	// tell the device that we will support it.
-	outportb(iobase + VIRTIO_PCI_STATUS, VIRTIO_CONFIG_S_ACKNOWLEDGE|VIRTIO_CONFIG_S_DRIVER);
-
-	*features = inportl(iobase + VIRTIO_PCI_HOST_FEATURES);
-
-	// tell the device that the features are OK
-	outportb(iobase + VIRTIO_PCI_STATUS, VIRTIO_CONFIG_S_ACKNOWLEDGE|VIRTIO_CONFIG_S_DRIVER|VIRTIO_CONFIG_S_FEATURES_OK);
-
-	status = inportb(iobase + VIRTIO_PCI_STATUS);
-	if (!(status & VIRTIO_CONFIG_S_FEATURES_OK))
-		return ERR_ARG;
-
-	return 0;
-}
-
-static int
-virtio_queue_setup(uint32_t iobase, int index, virt_queue_t *vq)
-{
-	unsigned int num;
-	size_t total_size;
-	int i;
-
-	// determine queue size
-	outportw(iobase + VIRTIO_PCI_QUEUE_SEL, index);
-	num = inportw(iobase + VIRTIO_PCI_QUEUE_NUM);
-
-	if (num > QUEUE_LIMIT) {
-		LOG_INFO("%s: queue num %u is bigger than %u\n", __func__, num, QUEUE_LIMIT);
-		return ERR_ARG;
-	}
-
-	total_size = vring_size(num, PAGE_SIZE);
-
-	void* vring_base = page_alloc(total_size, VMA_READ | VMA_WRITE | VMA_CACHEABLE);
-	if (BUILTIN_EXPECT(!vring_base, 0)) {
-		LOG_INFO("%s: Not enough memory to create queue %u\n", __func__, index);
-		return ERR_MEM;
-	}
-	memset((void*)vring_base, 0, total_size);
-	vring_init(&vq->vring, num, vring_base, PAGE_SIZE);
-
-	vq->virt_buffer = (uint64_t) page_alloc(num * VIRTIO_BUFFER_SIZE, VMA_READ|VMA_WRITE|VMA_CACHEABLE);
-	if (BUILTIN_EXPECT(!vq->virt_buffer, 0)) {
-		LOG_INFO("%s: Not enough memory to create buffer %u\n", __func__, index);
-		return -1;
-	}
-	vq->phys_buffer = virt_to_phys(vq->virt_buffer);
-
-	for(i=0; i<num; i++) {
-		vq->vring.desc[i].addr = vq->phys_buffer + i * VIRTIO_BUFFER_SIZE;
-	}
-	outportw(iobase+VIRTIO_PCI_QUEUE_SEL, index);
-	outportl(iobase+VIRTIO_PCI_QUEUE_PFN, virt_to_phys((size_t) vring_base) >> PAGE_BITS);
-
-	return 0;
-}
 
 static int
 virtio_send(virt_queue_t *vq, char *buf, int size)
@@ -170,6 +93,8 @@ send_control_msg(virt_queue_t *vq, unsigned int event, unsigned int value)
 }
 #endif
 
+struct virtio_device virtio_console;
+
 int
 virtio_console_init(void)
 {
@@ -189,16 +114,13 @@ virtio_console_init(void)
 	}
 	if (i >= 0x1100)
 		goto out;
+	virtio_console.iobase = pci_info.base[0];
 
-	ret = virtio_feature_setup(pci_info.base[0], &features);
-	if (ret)
-		goto out;
-
-	ret = virtio_queue_setup(pci_info.base[0], 1, &vq);
+	ret = virtio_device_setup(&virtio_console);
 	if (ret)
 		goto out;
 	
-	ret = virtio_send(&vq, "tea test\n", strlen("tea test\n") + 1);
+	ret = virtio_send(&virtio_console.vq, "tea test\n", strlen("tea test\n") + 1);
 	if (ret)
 		goto out;
 	outportw(pci_info.base[0]+VIRTIO_PCI_QUEUE_NOTIFY, 1);
