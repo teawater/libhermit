@@ -34,7 +34,7 @@
 #include <hermit/logging.h>
 #include "util.h"
 
-inline int isprint(unsigned char e)
+static inline int isprint(unsigned char e)
 {
 	if ((e < 0x30) || (e > 0x80))
 		return 0;

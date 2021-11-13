@@ -107,7 +107,7 @@ void main(void)
 	}
 
 	// enable paging
-	page_init();
+	//page_init();
 
 	if (mb_info) {
 		if (mb_info->flags & MULTIBOOT_INFO_MEM_MAP) {

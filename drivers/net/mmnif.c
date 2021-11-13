@@ -226,6 +226,7 @@ static void mmnif_irqhandler(struct state* s);
  */
 inline static int mmnif_trigger_irq(int dest_ip)
 {
+#if 0
 	int dest;
 
 	if (dest_ip == 1)
@@ -233,6 +234,8 @@ inline static int mmnif_trigger_irq(int dest_ip)
 	else
 		dest = 0;	// TODO: determine physical apic id of the destination
 	return apic_send_ipi(dest, MMNIF_IRQ);
+#endif
+	return -ENOSYS;
 }
 
 /* mmnif_print_stats(): Print the devices stats of the

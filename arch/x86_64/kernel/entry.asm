@@ -227,9 +227,9 @@ Lno_pml4_init:
     mov cr3, rax
 
 %if MAX_CORES > 1
-    mov eax, DWORD [cpu_online]
-    cmp eax, 0
-    jne Lsmp_main
+    ;mov eax, DWORD [cpu_online]
+    ;cmp eax, 0
+    ;jne Lsmp_main
 %endif
 
     ; set default stack pointer
@@ -245,12 +245,12 @@ Lno_pml4_init:
 ALIGN 64
 Lsmp_main:
     ; set default stack pointer
-    mov rsp, stack_top-0x10
-    mov rbp, rsp
+    ;mov rsp, stack_top-0x10
+    ;mov rbp, rsp
 
-    extern smp_start
-    call smp_start
-    jmp $
+    ;extern smp_start
+    ;call smp_start
+    ;jmp $
 %endif
 
 Llinux_main:
@@ -511,9 +511,9 @@ __startcontext:
     call setcontext
 
 Lno_context:
-    extern exit
-    call exit
-    jmp $
+    ;extern exit
+    ;call exit
+    ;jmp $
 
 global switch_context
 align 64

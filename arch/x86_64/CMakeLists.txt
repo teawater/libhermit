@@ -60,8 +60,7 @@ file(GLOB MM_SOURCES		"mm/*.c")
 
 # add boot.h as source to mark dependency boot.asm -> boot.h -> apic.c
 add_library(${X86_KERNEL_C_TARGET} OBJECT
-	${KERNEL_SOURCES} ${MM_SOURCES}
-	${GENERATED_CONFIG_DIR}/hermit/boot.h)
+	${KERNEL_SOURCES} ${MM_SOURCES})
 
 target_include_directories(${X86_KERNEL_C_TARGET} BEFORE
 	PUBLIC ${HERMIT_KERNEL_INCLUDES}
@@ -71,19 +70,19 @@ target_compile_options(${X86_KERNEL_C_TARGET}
 	PRIVATE ${HERMIT_KERNEL_FLAGS})
 
 # assemble boot.asm and dump to C-array in boot.h
-add_custom_command(
-	OUTPUT
-		${GENERATED_CONFIG_DIR}/hermit/boot.h
-	DEPENDS
-		kernel/boot.asm
-	COMMAND
-		echo "static const uint8_t boot_code[] = {" > boot.h
-	COMMAND
-		nasm -f bin -o boot.bin ${CMAKE_CURRENT_LIST_DIR}/kernel/boot.asm
-	COMMAND
-		hexdump -v -e "7/1 \"0x%02X, \" 1/1 \" 0x%02X,\\n\"" boot.bin >> boot.h
-	COMMAND
-		echo "};" >> boot.h
-	WORKING_DIRECTORY
-		${GENERATED_CONFIG_DIR}/hermit/
-	VERBATIM USES_TERMINAL)
+#add_custom_command(
+#	OUTPUT
+#		${GENERATED_CONFIG_DIR}/hermit/boot.h
+#	DEPENDS
+#		kernel/boot.asm
+#	COMMAND
+#		echo "static const uint8_t boot_code[] = {" > boot.h
+#	COMMAND
+#		nasm -f bin -o boot.bin ${CMAKE_CURRENT_LIST_DIR}/kernel/boot.asm
+#	COMMAND
+#		hexdump -v -e "7/1 \"0x%02X, \" 1/1 \" 0x%02X,\\n\"" boot.bin >> boot.h
+#	COMMAND
+#		echo "};" >> boot.h
+#	WORKING_DIRECTORY
+#		${GENERATED_CONFIG_DIR}/hermit/
+#	VERBATIM USES_TERMINAL)

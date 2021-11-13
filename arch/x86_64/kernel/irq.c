@@ -149,8 +149,10 @@ static int irq_remap(void)
 
 int enable_dynticks(void)
 {
+#if 0
 	if (BUILTIN_EXPECT(apic_is_enabled(), 1))
 		return apic_disable_timer();
+#endif
 
 	return -EINVAL;
 }

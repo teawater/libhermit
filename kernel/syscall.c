@@ -120,6 +120,7 @@ typedef struct {
 /** @brief To be called by the systemcall to exit tasks */
 void NORETURN sys_exit(int arg)
 {
+#if 0
 	if (is_uhyve()) {
 		uhyve_send(UHYVE_PORT_EXIT, (unsigned) virt_to_phys((size_t) &arg));
 	} else {
@@ -145,6 +146,7 @@ void NORETURN sys_exit(int arg)
 	}
 
 	do_exit(arg);
+#endif
 }
 
 typedef struct {
@@ -162,6 +164,7 @@ typedef struct {
 
 ssize_t sys_read(int fd, char* buf, size_t len)
 {
+#if 0
 	sys_read_t sysargs = {__NR_read, fd, len};
 	ssize_t j, ret;
 
@@ -208,6 +211,8 @@ ssize_t sys_read(int fd, char* buf, size_t len)
 	spinlock_irqsave_unlock(&lwip_lock);
 
 	return j;
+#endif
+	return -ENOSYS;
 }
 
 ssize_t readv(int d, const struct iovec *iov, int iovcnt)
@@ -229,6 +234,7 @@ typedef struct {
 
 ssize_t sys_write(int fd, const char* buf, size_t len)
 {
+#if 0
 	if (BUILTIN_EXPECT(!buf, 0))
 		return -EINVAL;
 
@@ -293,6 +299,8 @@ ssize_t sys_write(int fd, const char* buf, size_t len)
 	spinlock_irqsave_unlock(&lwip_lock);
 
 	return i;
+#endif
+	return -ENOSYS;
 }
 
 ssize_t writev(int fildes, const struct iovec *iov, int iovcnt)
@@ -345,6 +353,7 @@ typedef struct {
 
 int sys_open(const char* name, int flags, int mode)
 {
+#if 0
 	if (is_uhyve()) {
 		uhyve_open_t uhyve_open = {(const char*)virt_to_phys((size_t)name), flags, mode, -1};
 
@@ -402,6 +411,8 @@ out:
 	spinlock_irqsave_unlock(&lwip_lock);
 
 	return ret;
+#endif
+	return -ENOSYS;
 }
 
 typedef struct {
@@ -416,6 +427,7 @@ typedef struct {
 
 int sys_close(int fd)
 {
+#if 0
 	int ret, s;
 	sys_close_t sysargs = {__NR_close, fd};
 
@@ -452,6 +464,8 @@ out:
 	spinlock_irqsave_unlock(&lwip_lock);
 
 	return ret;
+#endif
+	return -ENOSYS;
 }
 
 int sys_spinlock_init(spinlock_t** lock)
@@ -598,6 +612,7 @@ typedef struct {
 
 off_t sys_lseek(int fd, off_t offset, int whence)
 {
+#if 0
 	if (is_uhyve()) {
 		uhyve_lseek_t uhyve_lseek = { fd, offset, whence };
 
@@ -624,6 +639,8 @@ off_t sys_lseek(int fd, off_t offset, int whence)
 	spinlock_irqsave_unlock(&lwip_lock);
 
 	return off;
+#endif
+	return -ENOSYS;
 }
 
 int sys_rcce_init(int session_id)

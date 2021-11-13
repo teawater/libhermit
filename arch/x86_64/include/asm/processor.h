@@ -991,12 +991,14 @@ uint32_t get_cpu_frequency(void);
 void udelay(uint32_t usecs);
 
 /// Register a task's TSS at GDT
+#if 0
 static inline void register_task(void)
 {
 	uint16_t sel = (apic_cpu_id()*2+7) << 3;
 
 	asm volatile ("ltr %%ax" : : "a"(sel));
 }
+#endif
 
 /** @brief System calibration
  *
@@ -1006,6 +1008,8 @@ static inline void register_task(void)
  */
 inline static int system_calibration(void)
 {
+	return -1;
+#if 0
 	size_t cr0;
 
 	apic_init();
@@ -1024,6 +1028,7 @@ inline static int system_calibration(void)
 	apic_calibration();
 
 	return 0;
+#endif
 }
 
 #ifdef __cplusplus

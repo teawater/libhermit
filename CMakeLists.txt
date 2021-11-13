@@ -77,6 +77,23 @@ add_library(hermit-bootstrap STATIC ${KERNEL_OBJECTS})
 set_target_properties(hermit-bootstrap PROPERTIES
 	ARCHIVE_OUTPUT_NAME hermit)
 
+##
+set(CMAKE_LINKER_NAME ld CACHE STRING "Name of the binutils linker")
+mark_as_advanced(CMAKE_LINKER_NAME)
+
+if(NOT CMAKE_LINKER)
+	message(FATAL_ERROR "Could not find the GNU LD linker: ${CMAKE_LINKER_NAME}")
+endif()
+
+set(CMAKE_C_LINK_EXECUTABLE "ld <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -T ${CMAKE_CURRENT_LIST_DIR}/link.ld -z max-page-size=4096 --build-id=none -nostdlib -static")
+
+add_executable(zheluo ${KERNEL_OBJECTS})
+
+set_target_properties(zheluo PROPERTIES
+	OUTPUT_NAME zheluo.elf)
+##
+
 # after compiling ASM sources, we need to post-process them. Adding this
 # dependency makes sure that this is done before hermit is linked
 if("${TARGET_ARCH}" STREQUAL "aarch64-hermit")

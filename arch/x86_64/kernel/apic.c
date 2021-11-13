@@ -25,6 +25,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if 0
 #include <hermit/stddef.h>
 #include <hermit/stdio.h>
 #include <hermit/stdlib.h>
@@ -1216,4 +1217,10 @@ int ioapic_intoff(uint8_t irq, uint8_t apicid)
 	ioapic_write(IOAPIC_REG_TABLE+1+off, route.dest.upper);
 
 	return 0;
+}
+#endif
+
+void shutdown_system(void)
+{
+
 }

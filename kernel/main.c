@@ -113,6 +113,7 @@ extern void signal_init();
 
 static int hermit_init(void)
 {
+#if 0
 	clock_init();
 
 	size_t sz = (size_t) &percore_end0 - (size_t) &percore_start;
@@ -132,6 +133,7 @@ static int hermit_init(void)
 	multitasking_init();
 	memory_init();
 	signal_init();
+#endif
 
 	return 0;
 }
@@ -275,6 +277,7 @@ success:
 
 int network_shutdown(void)
 {
+#if 0
 	LOG_INFO("Shutdown LwIP\n");
 
 	if (libc_sd >= 0) {
@@ -282,6 +285,7 @@ int network_shutdown(void)
 		libc_sd = -1;
 		lwip_close(s);
 	}
+#endif
 
 	//mmnif_shutdown();
 	//stats_display();
@@ -320,6 +324,7 @@ char* itoa(uint64_t input, char* str);
 // init task => creates all other tasks and initializes the LwIP
 static int initd(void* arg)
 {
+#if 0
 	int s = -1, c = -1;
 	int i, j, flag;
 	int len, err;
@@ -333,7 +338,7 @@ static int initd(void* arg)
 	LOG_INFO("Initd is running\n");
 
 	// initialized bss section
-	memset((void*)&__bss_start, 0x00, (size_t) &kernel_start + image_size - (size_t) &__bss_start);
+	//memset((void*)&__bss_start, 0x00, (size_t) &kernel_start + image_size - (size_t) &__bss_start);
 
 	// setup heap
 	if (!curr_task->heap)
@@ -360,6 +365,7 @@ static int initd(void* arg)
 	err = -EINVAL;
 #endif
 
+#if 0
 	if (is_uhyve()) {
 		int i;
 		uhyve_cmdsize_t uhyve_cmdsize;
@@ -417,6 +423,7 @@ static int initd(void* arg)
 
 		return 0;
 	}
+#endif
 
 	// initialize iRCCE
 	if (!is_single_kernel())
@@ -536,8 +543,8 @@ static int initd(void* arg)
 	}
 
 	// call user code
-	libc_sd = c;
-	libc_start(argc, argv, environ);
+	//libc_sd = c;
+	//libc_start(argc, argv, environ);
 
 out:
 	if (argv) {
@@ -567,6 +574,8 @@ out:
 		lwip_close(s);
 
 	return 0;
+#endif
+	return -ENOSYS;
 }
 
 //#define MEASURE_CONTEXT
@@ -648,7 +657,7 @@ int hermit_main(void)
 {
 	hermit_init();
 	system_calibration(); // enables also interrupts
-
+#if 0
 	LOG_INFO("This is Hermit %s, build on %s\n", PACKAGE_VERSION, __DATE__);
 	//LOG_INFO("Isle %d of %d possible isles\n", isle, possible_isles);
 	LOG_INFO("Kernel starts at %p and ends at %p\n", &kernel_start, (size_t)&kernel_start + image_size);
@@ -667,6 +676,12 @@ int hermit_main(void)
 		LOG_INFO("Kernel cmdline: %s\n", get_cmdline());
 	if (has_hbmem())
 		LOG_INFO("Found high bandwidth memory at 0x%zx (size 0x%zx)\n", get_hbmem_base(), get_hbmem_size());
+#endif
+
+	char *buf = 0;
+	buf[0x100000000] = 1;
+	LOG_INFO("teago %c\n", buf[0x100000000]);
+	while(1) {HALT; }
 
 #if 0
 	print_pci_adapters();
