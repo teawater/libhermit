@@ -77,6 +77,9 @@ add_library(hermit-bootstrap STATIC ${KERNEL_OBJECTS})
 set_target_properties(hermit-bootstrap PROPERTIES
 	ARCHIVE_OUTPUT_NAME hermit)
 
+file(GLOB KATA_SOURCES	"kata/*.c")
+add_executable(kata ${KATA_SOURCES})
+
 # after compiling ASM sources, we need to post-process them. Adding this
 # dependency makes sure that this is done before hermit is linked
 if("${TARGET_ARCH}" STREQUAL "aarch64-hermit")
