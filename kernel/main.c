@@ -353,6 +353,8 @@ static int initd(void* arg)
 	vma_free(curr_task->heap->start, curr_task->heap->start+PAGE_SIZE);
 	vma_add(curr_task->heap->start, curr_task->heap->start+PAGE_SIZE, VMA_HEAP|VMA_USER);
 
+#ifdef KATA
+#else
 #ifndef __aarch64__
 	// initialize network
 	err = init_netifs();
@@ -565,7 +567,7 @@ out:
 
 	if (s > 0)
 		lwip_close(s);
-
+#endif
 	return 0;
 }
 
