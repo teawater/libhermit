@@ -667,6 +667,9 @@ int hermit_main(void)
 		LOG_INFO("Kernel cmdline: %s\n", get_cmdline());
 	if (has_hbmem())
 		LOG_INFO("Found high bandwidth memory at 0x%zx (size 0x%zx)\n", get_hbmem_base(), get_hbmem_size());
+#ifdef KATA
+	LOG_INFO("This build is for KATA\n");
+#endif
 
 #if 0
 	print_pci_adapters();

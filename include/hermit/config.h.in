@@ -24,3 +24,5 @@
 
 /* Define to use machine specific version of strncpy */
 #cmakedefine HAVE_ARCH_STRNCPY		(@HAVE_ARCH_STRNCPY@)
+
+#cmakedefine KATA

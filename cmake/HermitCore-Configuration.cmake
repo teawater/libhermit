@@ -46,3 +46,5 @@ set(HAVE_ARCH_STRCPY  "0" CACHE STRING
 set(HAVE_ARCH_STRNCPY "0" CACHE STRING
 	"Use machine specific version of strncpy")
 endif()
+
+option(KATA "kata" ON)
