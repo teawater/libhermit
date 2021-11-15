@@ -302,6 +302,9 @@ ssize_t writev(int fildes, const struct iovec *iov, int iovcnt)
 
 ssize_t sys_sbrk(ssize_t incr)
 {
+#ifdef KATA
+	return -ENOSYS;
+#else
 	ssize_t ret;
 	vma_t* heap = per_core(current_task)->heap;
 	static spinlock_t heap_lock = SPINLOCK_INIT;
@@ -334,6 +337,7 @@ ssize_t sys_sbrk(ssize_t incr)
 	spinlock_unlock(&heap_lock);
 
 	return ret;
+#endif
 }
 
 typedef struct {

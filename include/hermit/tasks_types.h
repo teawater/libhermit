@@ -93,8 +93,10 @@ typedef struct task {
 	uint64_t		start_tick;
 	/// last TSC, when the task got the CPU
 	uint64_t		last_tsc;
+#ifndef KATA
 	/// the userspace heap
 	vma_t*			heap;
+#endif
 	/// parent thread
 	tid_t			parent;
 	/// next task in the queue

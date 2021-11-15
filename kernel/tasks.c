@@ -51,9 +51,16 @@ volatile uint32_t go_down = 0;
  *
  * A task's id will be its position in this array.
  */
-static task_t task_table[MAX_TASKS] = { \
+static task_t task_table[MAX_TASKS] = 
+#ifdef KATA
+{ \
+        [0]                 = {0, TASK_IDLE, 0, NULL, NULL, NULL, TASK_DEFAULT_FLAGS, 0, 0, 0, 0, 0, NULL, NULL, 0, 0, 0, NULL, FPU_STATE_INIT}, \
+        [1 ... MAX_TASKS-1] = {0, TASK_INVALID, 0, NULL, NULL, NULL, TASK_DEFAULT_FLAGS, 0, 0, 0, 0, 0, NULL, NULL, 0, 0, 0, NULL, FPU_STATE_INIT}};
+#else
+{ \
         [0]                 = {0, TASK_IDLE, 0, NULL, NULL, NULL, TASK_DEFAULT_FLAGS, 0, 0, 0, 0, NULL, 0, NULL, NULL, 0, 0, 0, NULL, FPU_STATE_INIT}, \
         [1 ... MAX_TASKS-1] = {0, TASK_INVALID, 0, NULL, NULL, NULL, TASK_DEFAULT_FLAGS, 0, 0, 0, 0, NULL, 0, NULL, NULL, 0, 0, 0, NULL, FPU_STATE_INIT}};
+#endif
 
 static spinlock_irqsave_t table_lock = SPINLOCK_IRQSAVE_INIT;
 
@@ -304,7 +311,9 @@ tid_t set_idle_task(void)
 			task_table[i].stack = NULL;
 			task_table[i].ist_addr = NULL;
 			task_table[i].prio = IDLE_PRIO;
+#ifndef KATA
 			task_table[i].heap = NULL;
+#endif
 			readyqueues[core_id].idle = task_table+i;
 			set_per_core(current_task, readyqueues[core_id].idle);
 
@@ -335,10 +344,12 @@ void finish_task_switch(void)
 				old->stack = NULL;
 			}
 
+#ifndef KATA
 			if (!old->parent && old->heap) {
 				kfree(old->heap);
 				old->heap = NULL;
 			}
+#endif
 
 			if (old->ist_addr) {
 				destroy_stack(old->ist_addr, KERNEL_STACK_SIZE);
@@ -475,7 +486,9 @@ int clone_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio)
 			task_table[i].last_stack_pointer = NULL;
 			task_table[i].stack = stack;
 			task_table[i].prio = prio;
+#ifndef KATA
 			task_table[i].heap = curr_task->heap;
+#endif
 			task_table[i].start_tick = get_clock_tick();
 			task_table[i].last_tsc = 0;
 			task_table[i].parent = curr_task->id;
@@ -577,7 +590,9 @@ int create_task(tid_t* id, entry_point_t ep, void* arg, uint8_t prio, uint32_t c
 			task_table[i].last_stack_pointer = NULL;
 			task_table[i].stack = stack;
 			task_table[i].prio = prio;
+#ifndef KATA
 			task_table[i].heap = NULL;
+#endif
 			task_table[i].start_tick = get_clock_tick();
 			task_table[i].last_tsc = 0;
 			task_table[i].parent = 0;

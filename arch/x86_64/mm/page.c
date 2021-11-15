@@ -77,14 +77,18 @@ size_t virt_to_phys(size_t addr)
 		size_t phy   = entry &  PAGE_2M_MASK;	// physical page frame number
 
 		return phy | off;
-	} else if ((task->heap) && (addr >= task->heap->start) && (addr < task->heap->end)) {
+	}
+#ifndef KATA
+	else if ((task->heap) && (addr >= task->heap->start) && (addr < task->heap->end)) {
 		size_t vpn   = addr >> (HUGE_PAGE_BITS); // virtual page number
 		size_t entry = (HUGE_PAGE_SIZE == PAGE_2M_SIZE) ? self[1][vpn] : self[2][vpn];	// page table entry
 		size_t off   = addr  & ~HUGE_PAGE_MASK;	// offset within page
 		size_t phy   = entry &  HUGE_PAGE_MASK;	// physical page frame number
 
 		return phy | off;
-	} else {
+	}
+#endif
+	else {
 		size_t vpn   = addr >> PAGE_BITS;	// virtual page number
 		size_t entry = self[0][vpn];		// page table entry
 		size_t off   = addr  & ~PAGE_MASK;	// offset within page
@@ -247,6 +251,7 @@ void page_fault_handler(struct state *s)
 		return 1;
 	}
 
+#ifndef KATA
 	spinlock_irqsave_lock(&page_lock);
 
 	if (((task->heap) && (viraddr >= task->heap->start) && (viraddr < task->heap->end))
@@ -294,6 +299,7 @@ void page_fault_handler(struct state *s)
 
 default_handler:
 	spinlock_irqsave_unlock(&page_lock);
+#endif
 
 	LOG_ERROR("Page Fault Exception (%d) on core %d at cs:ip = %#x:%#lx, fs = %#lx, gs = %#lx, rflags 0x%lx, task = %u, addr = %#lx, error = %#x [ %s %s %s %s %s ]\n",
 		s->int_no, CORE_ID, s->cs, s->rip, s->fs, s->gs, s->rflags, task->id, viraddr, s->error,
@@ -304,8 +310,10 @@ default_handler:
 		(s->error & 0x8) ? "reserved bit" : "\b");
 	LOG_ERROR("rax %#lx, rbx %#lx, rcx %#lx, rdx %#lx, rbp, %#lx, rsp %#lx rdi %#lx, rsi %#lx, r8 %#lx, r9 %#lx, r10 %#lx, r11 %#lx, r12 %#lx, r13 %#lx, r14 %#lx, r15 %#lx\n",
 		s->rax, s->rbx, s->rcx, s->rdx, s->rbp, s->rsp, s->rdi, s->rsi, s->r8, s->r9, s->r10, s->r11, s->r12, s->r13, s->r14, s->r15);
+#ifndef KATA
 	if (task->heap)
 		LOG_ERROR("Heap 0x%zx - 0x%zx\n", task->heap->start, task->heap->end);
+#endif
 
 	// clear cr2 to signalize that the pagefault is solved by the pagefault handler
 	write_cr2(0);
