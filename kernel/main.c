@@ -136,6 +136,12 @@ static int hermit_init(void)
 	return 0;
 }
 
+#ifdef KATA
+int network_shutdown(void)
+{
+	return 0;
+}
+#else
 static void tcpip_init_done(void* arg)
 {
 	sys_sem_t* sem = (sys_sem_t*)arg;
@@ -288,6 +294,7 @@ int network_shutdown(void)
 
 	return 0;
 }
+#endif
 
 #if MAX_CORES > 1
 int smp_main(void)
