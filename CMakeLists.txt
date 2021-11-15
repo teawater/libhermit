@@ -77,10 +77,6 @@ add_library(hermit-bootstrap STATIC ${KERNEL_OBJECTS})
 set_target_properties(hermit-bootstrap PROPERTIES
 	ARCHIVE_OUTPUT_NAME hermit)
 
-file(GLOB KATA_SOURCES	"kata/*.c")
-add_executable(kata ${KATA_SOURCES} ${CMAKE_BINARY_DIR}/libhermit.a)
-target_link_libraries (kata ${CMAKE_BINARY_DIR}/libhermit.a)
-
 # after compiling ASM sources, we need to post-process them. Adding this
 # dependency makes sure that this is done before hermit is linked
 if("${TARGET_ARCH}" STREQUAL "aarch64-hermit")
@@ -242,3 +238,8 @@ set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE all)
 set(CPACK_PACKAGE_RELOCATABLE FALSE)
 
 include(CPack)
+
+file(GLOB KATA_SOURCES	"kata/*.c")
+add_executable(kata ${KATA_SOURCES} ${CMAKE_BINARY_DIR}/libhermit.a)
+target_compile_options(kata PRIVATE -g)
+target_link_libraries (kata ${CMAKE_BINARY_DIR}/libhermit.a)
