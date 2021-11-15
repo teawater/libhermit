@@ -78,7 +78,7 @@ set_target_properties(hermit-bootstrap PROPERTIES
 	ARCHIVE_OUTPUT_NAME hermit)
 
 file(GLOB KATA_SOURCES	"kata/*.c")
-add_executable(kata ${KATA_SOURCES})
+add_executable(kata ${KATA_SOURCES} ${CMAKE_BINARY_DIR}/libhermit.a)
 target_link_libraries (kata ${CMAKE_BINARY_DIR}/libhermit.a)
 
 # after compiling ASM sources, we need to post-process them. Adding this
