@@ -111,12 +111,10 @@ virtio_console_init(void)
 				    output_vq_callback,
 				    "virtio_console_output_vq",
 				    false);
-	if (IS_ERR(output_vq)) {
+	if (IS_ERR(output_vq))
 		ret = PTR_ERR(output_vq);
-		goto out;
-	}
+	spinlock_irqsave_unlock(&virtio_console_output_lock);
 
 out:
-	spinlock_irqsave_unlock(&virtio_console_output_lock);
 	return ret;
 }
