@@ -338,6 +338,7 @@ static int initd(void* arg)
 #if 0
 	for (int i = 0; 1; i++) {
 		LOG_INFO("KATA is running %d\n", i);
+		timer_wait(1 * TIMER_FREQ);
 	}
 #endif
 
