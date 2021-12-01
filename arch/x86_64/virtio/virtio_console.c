@@ -109,6 +109,8 @@ virtio_console_init(void)
 		ret = PTR_ERR(output_vq);
 	spinlock_irqsave_unlock(&virtio_console_output_lock);
 
+	virtio_device_ready(&virtio_console);
+
 out:
 	return ret;
 }

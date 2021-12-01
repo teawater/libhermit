@@ -46,7 +46,6 @@ static void virtio_device_add_status(struct virtio_device *vdev, uint8_t status)
 	virtio_device_set_status(vdev, virtio_device_get_status(vdev) | status);
 }
 
-static inline
 void virtio_device_ready(struct virtio_device *vdev)
 {
 	virtio_device_add_status(vdev, VIRTIO_CONFIG_S_DRIVER_OK);
@@ -116,8 +115,6 @@ virtio_device_setup(struct virtio_device *vdev)
 		ret = -ENODEV;
 		goto out;
 	}
-
-	virtio_device_ready(vdev);
 
 out:
 	return ret;
