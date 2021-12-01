@@ -674,15 +674,42 @@ static int measure_context(void* arg)
 
 #ifdef KATA
 extern int virtio_console_init(void);
+
+extern int virtio_vsock_init(void);
+
+static int
+virtio_init(void)
+{
+	int ret;
+
+	ret = virtio_console_init();
+	if (ret)
+		goto out;
+
+	ret = virtio_vsock_init();
+	if (ret) {
+		LOG_INFO("vsock init failed %d\n", ret);
+		goto out;
+	}
+
+out:
+	return ret;
+}
 #endif
 
 int hermit_main(void)
 {
 	hermit_init();
 	system_calibration(); // enables also interrupts
+
 #ifdef KATA
 	// Call after system_calibration because system_calibration does some cr3 init work.
-	virtio_console_init();
+	if (virtio_init()) {
+		LOG_INFO("virtio init fail\n");
+		while(1)
+			HALT;
+	}
+	LOG_INFO("This build is for KATA\n");
 #endif
 
 	LOG_INFO("This is Hermit %s, build on %s\n", PACKAGE_VERSION, __DATE__);
@@ -703,9 +730,6 @@ int hermit_main(void)
 		LOG_INFO("Kernel cmdline: %s\n", get_cmdline());
 	if (has_hbmem())
 		LOG_INFO("Found high bandwidth memory at 0x%zx (size 0x%zx)\n", get_hbmem_base(), get_hbmem_size());
-#ifdef KATA
-	LOG_INFO("This build is for KATA\n");
-#endif
 
 #if 0
 	print_pci_adapters();
