@@ -323,4 +323,7 @@ extern bool virtqueue_kick(struct virtqueue *vq);
 extern void *virtqueue_get_buf(struct virtqueue *vq, unsigned int *len);
 extern bool virtqueue_is_broken(struct virtqueue *vq);
 
+extern int virtio_device_find(pci_info_t *pci_info, uint32_t vendor_id,
+			      uint32_t device_id);
+
 #endif

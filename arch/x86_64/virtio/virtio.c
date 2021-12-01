@@ -122,3 +122,24 @@ virtio_device_setup(struct virtio_device *vdev)
 out:
 	return ret;
 }
+
+int
+virtio_device_find(pci_info_t *pci_info, uint32_t vendor_id, uint32_t device_id)
+{
+	int i, ret = -ENXIO;
+
+	/* Qumranet donated their vendor ID for devices 0x1000 thru 0x10FF. */
+	for(i = 0; i < 0x1100; i++) {
+		if ((pci_get_device_info(vendor_id, i,
+					 device_id << 16 | vendor_id,
+					 pci_info, 1) == 0)) {
+			break;
+		}
+	}
+	if (i >= 0x1100)
+		goto out;
+
+	ret = 0;
+out:
+	return ret;
+}

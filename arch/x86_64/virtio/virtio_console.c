@@ -84,19 +84,13 @@ out:
 int
 virtio_console_init(void)
 {
-	int ret = -ENXIO, i;
+	int ret;
 	pci_info_t pci_info;
 
-	/* Qumranet donated their vendor ID for devices 0x1000 thru 0x10FF. */
-	for(i=0; i < 0x1100; i++) {
-		if ((pci_get_device_info(VENDOR_ID, i,
-					 VIRTIO_ID_CONSOLE << 16 | VENDOR_ID,
-					 &pci_info, 1) == 0)) {
-			break;
-		}
-	}
-	if (i >= 0x1100)
+	ret = virtio_device_find(&pci_info, VENDOR_ID, VIRTIO_ID_CONSOLE);
+	if (ret)
 		goto out;
+
 	virtio_console.iobase = pci_info.base[0];
 
 	ret = virtio_device_setup(&virtio_console);
