@@ -335,12 +335,12 @@ static int initd(void* arg)
 
 	LOG_INFO("KATA is running\n");
 
-#if 0
+//#if 0
 	for (int i = 0; 1; i++) {
 		LOG_INFO("KATA is running %d\n", i);
-		timer_wait(1 * TIMER_FREQ);
+		timer_wait(3 * TIMER_FREQ);
 	}
-#endif
+//#endif
 
 	return 0;
 }

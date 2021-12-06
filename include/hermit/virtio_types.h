@@ -49,6 +49,7 @@ typedef uint64_t	__u64;
 typedef __u16 __bitwise__ __virtio16;
 typedef __u32 __bitwise__ __virtio32;
 typedef __u64 __bitwise__ __virtio64;
+typedef __u64 __bitwise__ __le64;
 typedef __u32 __bitwise__ __le32;
 typedef __u16 __bitwise__ __le16;
 typedef __u8 __bitwise__ __le8;
