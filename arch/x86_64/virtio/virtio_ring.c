@@ -418,13 +418,13 @@ static struct scatterlist *sg_next(struct scatterlist *sg)
 	return sg;
 }
 
-static inline int virtqueue_add_split(struct virtqueue *_vq,
-				      struct scatterlist *sgs[],
-				      unsigned int total_sg,
-				      unsigned int out_sgs,
-				      unsigned int in_sgs,
-				      void *data,
-				      void *ctx)
+int virtqueue_add_split(struct virtqueue *_vq,
+			struct scatterlist *sgs[],
+			unsigned int total_sg,
+			unsigned int out_sgs,
+			unsigned int in_sgs,
+			void *data,
+			void *ctx)
 {
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	struct scatterlist *sg;
