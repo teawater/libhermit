@@ -316,6 +316,13 @@ extern struct virtqueue *vring_create_virtqueue_split(unsigned int index,
 						      const char *name);
 extern dma_addr_t virtqueue_get_desc_addr(struct virtqueue *vq);
 extern irqreturn_t vring_interrupt(void *vq);
+extern int virtqueue_add_split(struct virtqueue *_vq,
+			struct scatterlist *sgs[],
+			unsigned int total_sg,
+			unsigned int out_sgs,
+			unsigned int in_sgs,
+			void *data,
+			void *ctx);
 extern int virtqueue_add_outbuf(struct virtqueue *vq,
 				struct scatterlist *sg, unsigned int num,
 				void *data);
