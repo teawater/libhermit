@@ -214,7 +214,14 @@ static inline void sg_init_one(struct scatterlist *sg,
 # define __compiletime_object_size(obj) -1
 #endif
 
+/* Is this type a native word size -- useful for atomic operations */
+#define __native_word(t) \
+	(sizeof(t) == sizeof(char) || sizeof(t) == sizeof(short) || \
+	 sizeof(t) == sizeof(int) || sizeof(t) == sizeof(long))
+
 #ifdef __OPTIMIZE__
+#define __compiletime_error(message)    __attribute__((error(message)))
+
 # define __compiletime_assert(condition, msg, prefix, suffix)		\
 	do {								\
 		extern void prefix ## suffix(void) __compiletime_error(msg); \
