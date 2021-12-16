@@ -75,6 +75,7 @@ struct virtio_device {
 	uint32_t iobase;
 	uint64_t features;
 	//virt_queue_t vq;
+	void (*set_status)(struct virtio_device *vdev, uint8_t status);
 };
 
 struct scatterlist {
@@ -83,7 +84,7 @@ struct scatterlist {
 	bool		is_last;
 };
 
-extern int virtio_device_setup(struct virtio_device *vdev);
+extern int virtio_device_setup(struct virtio_device *vdev, pci_info_t* info, bool is_legacy);
 extern struct virtqueue *virtio_setup_vq(struct virtio_device *vdev,
 					 int index,
 					 void (*callback)(struct virtqueue *vq),
@@ -337,9 +338,12 @@ extern bool virtqueue_kick(struct virtqueue *vq);
 extern void *virtqueue_get_buf(struct virtqueue *vq, unsigned int *len);
 extern bool virtqueue_is_broken(struct virtqueue *vq);
 
-extern int virtio_device_find(pci_info_t *pci_info, uint32_t vendor_id,
+extern int virtio_device_find(pci_info_t *pci_info, bool *is_legacy, uint32_t vendor_id,
 			      uint32_t device_id);
 
 extern void virtio_device_ready(struct virtio_device *vdev);
+
+extern void virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info);
+extern void virtio_pci_legacy_init(struct virtio_device *vdev);
 
 #endif

@@ -117,14 +117,15 @@ virtio_vsock_init(void)
 {
 	int ret;
 	pci_info_t pci_info;
+	bool is_legacy;
 
-	ret = virtio_device_find(&pci_info, VENDOR_ID, VIRTIO_ID_VSOCK);
+	ret = virtio_device_find(&pci_info, &is_legacy, VENDOR_ID, VIRTIO_ID_VSOCK);
 	if (ret)
 		goto out;
 
 	virtio_vsock.iobase = pci_info.base[0];
 	
-	ret = virtio_device_setup(&virtio_vsock);
+	ret = virtio_device_setup(&virtio_vsock, &pci_info, is_legacy);
 	if (ret)
 		goto out;
 

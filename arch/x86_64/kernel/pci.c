@@ -154,6 +154,296 @@ int pci_init(void)
 	return 0;
 }
 
+#define PCI_HEADER_TYPE		0x0e	/* 8 bits */
+#define PCI_HEADER_TYPE_NORMAL	0
+#define PCI_COMMAND		0x04	/* 16 bits */
+#define PCI_COMMAND_IO		0x1	/* Enable response in I/O space */
+#define PCI_COMMAND_MEMORY	0x2	/* Enable response in Memory space */
+#define PCI_COMMAND_DECODE_ENABLE	(PCI_COMMAND_MEMORY | PCI_COMMAND_IO)
+/*
+ * Base addresses specify locations in memory or I/O space.
+ * Decoded size can be determined by writing a value of
+ * 0xffffffff to the register, and reading it back.  Only
+ * 1 bits are decoded.
+ */
+#define PCI_BASE_ADDRESS_0	0x10	/* 32 bits */
+#define PCI_BASE_ADDRESS_1	0x14	/* 32 bits [htype 0,1 only] */
+#define PCI_BASE_ADDRESS_2	0x18	/* 32 bits [htype 0 only] */
+#define PCI_BASE_ADDRESS_3	0x1c	/* 32 bits */
+#define PCI_BASE_ADDRESS_4	0x20	/* 32 bits */
+#define PCI_BASE_ADDRESS_5	0x24	/* 32 bits */
+#define  PCI_BASE_ADDRESS_SPACE		0x01	/* 0 = memory, 1 = I/O */
+#define  PCI_BASE_ADDRESS_SPACE_IO	0x01
+#define  PCI_BASE_ADDRESS_SPACE_MEMORY	0x00
+#define  PCI_BASE_ADDRESS_MEM_TYPE_MASK	0x06
+#define  PCI_BASE_ADDRESS_MEM_TYPE_32	0x00	/* 32 bit address */
+#define  PCI_BASE_ADDRESS_MEM_TYPE_1M	0x02	/* Below 1M [obsolete] */
+#define  PCI_BASE_ADDRESS_MEM_TYPE_64	0x04	/* 64 bit address */
+#define  PCI_BASE_ADDRESS_MEM_PREFETCH	0x08	/* prefetchable? */
+#define  PCI_BASE_ADDRESS_MEM_MASK	(~0x0fUL)
+#define  PCI_BASE_ADDRESS_IO_MASK	(~0x03UL)
+/* bit 1 is reserved if address_space = 1 */
+
+/* Header type 0 (normal devices) */
+#define PCI_CARDBUS_CIS		0x28
+#define PCI_SUBSYSTEM_VENDOR_ID	0x2c
+#define PCI_SUBSYSTEM_ID	0x2e
+#define PCI_ROM_ADDRESS		0x30	/* Bits 31..11 are address, 10..1 reserved */
+#define PCI_ROM_ADDRESS_ENABLE	0x01
+#define PCI_ROM_ADDRESS_MASK	(~0x7ffU)
+
+#define IORESOURCE_IO		0x00000100	/* PCI/ISA I/O ports */
+#define IORESOURCE_MEM		0x00000200
+#define IORESOURCE_PREFETCH	0x00002000	/* No side effects */
+#define IORESOURCE_SIZEALIGN	0x00040000	/* size indicates alignment */
+#define IORESOURCE_MEM_64	0x00100000
+#define IORESOURCE_ROM_ENABLE		(1<<0)	/* ROM is enabled, same as PCI_ROM_ADDRESS_ENABLE */
+
+#define IORESOURCE_DISABLED	0x10000000
+#define IORESOURCE_UNSET	0x20000000	/* No address assigned yet */
+#define IORESOURCE_AUTO		0x40000000
+#define IORESOURCE_BUSY		0x80000000	/* Driver has marked this resource busy */
+
+#define IO_SPACE_LIMIT 0xffffffff
+
+#define pci_info(...)
+#define pci_err(...)
+
+enum pci_bar_type {
+	pci_bar_unknown,	/* Standard PCI BAR probe */
+	pci_bar_io,		/* An I/O port BAR */
+	pci_bar_mem32,		/* A 32-bit memory BAR */
+	pci_bar_mem64,		/* A 64-bit memory BAR */
+};
+
+struct pci_bus_region {
+	pci_bus_addr_t	start;
+	pci_bus_addr_t	end;
+};
+
+static inline unsigned long decode_bar(u32 bar)
+{
+	u32 mem_type;
+	unsigned long flags;
+
+	if ((bar & PCI_BASE_ADDRESS_SPACE) == PCI_BASE_ADDRESS_SPACE_IO) {
+		flags = bar & ~PCI_BASE_ADDRESS_IO_MASK;
+		flags |= IORESOURCE_IO;
+		return flags;
+	}
+
+	flags = bar & ~PCI_BASE_ADDRESS_MEM_MASK;
+	flags |= IORESOURCE_MEM;
+	if (flags & PCI_BASE_ADDRESS_MEM_PREFETCH)
+		flags |= IORESOURCE_PREFETCH;
+
+	mem_type = bar & PCI_BASE_ADDRESS_MEM_TYPE_MASK;
+	switch (mem_type) {
+	case PCI_BASE_ADDRESS_MEM_TYPE_32:
+		break;
+	case PCI_BASE_ADDRESS_MEM_TYPE_1M:
+		/* 1M mem BAR treated as 32-bit BAR */
+		break;
+	case PCI_BASE_ADDRESS_MEM_TYPE_64:
+		flags |= IORESOURCE_MEM_64;
+		break;
+	default:
+		/* mem unknown type treated as 32-bit BAR */
+		break;
+	}
+	return flags;
+}
+
+void pcibios_bus_to_resource(struct pci_bus *bus, struct resource *res,
+			     struct pci_bus_region *region)
+{
+	struct pci_host_bridge *bridge = pci_find_host_bridge(bus);
+	struct resource_entry *window;
+	resource_size_t offset = 0;
+
+	resource_list_for_each_entry(window, &bridge->windows) {
+		struct pci_bus_region bus_region;
+
+		if (resource_type(res) != resource_type(window->res))
+			continue;
+
+		bus_region.start = window->res->start - window->offset;
+		bus_region.end = window->res->end - window->offset;
+
+		if (region_contains(&bus_region, region)) {
+			offset = window->offset;
+			break;
+		}
+	}
+
+	res->start = region->start + offset;
+	res->end = region->end + offset;
+}
+
+/**
+ * __pci_read_base - Read a PCI BAR
+ * @dev: the PCI device
+ * @type: type of the BAR
+ * @res: resource buffer to be filled in
+ * @pos: BAR position in the config space
+ *
+ * Returns 1 if the BAR is 64-bit, or 0 if 32-bit.
+ */
+int __pci_read_base(pci_info_t* dev, enum pci_bar_type type,
+		    struct resource *res, unsigned int pos)
+{
+	u32 l = 0, sz = 0, mask;
+	u64 l64, sz64, mask64;
+	u16 orig_cmd;
+	struct pci_bus_region region, inverted_region;
+	bool mmio_always_on = false;
+
+	mask = type ? PCI_ROM_ADDRESS_MASK : ~0;
+
+	/* No printks while decoding is disabled! */
+	if (!mmio_always_on) {
+		pci_read_config_word(dev, PCI_COMMAND, &orig_cmd);
+		if (orig_cmd & PCI_COMMAND_DECODE_ENABLE) {
+			pci_write_config_word(dev, PCI_COMMAND,
+				orig_cmd & ~PCI_COMMAND_DECODE_ENABLE);
+		}
+	}
+
+	pci_read_config_dword(dev, pos, &l);
+	pci_write_config_dword(dev, pos, l | mask);
+	pci_read_config_dword(dev, pos, &sz);
+	pci_write_config_dword(dev, pos, l);
+
+	/*
+	 * All bits set in sz means the device isn't working properly.
+	 * If the BAR isn't implemented, all bits must be 0.  If it's a
+	 * memory BAR or a ROM, bit 0 must be clear; if it's an io BAR, bit
+	 * 1 must be clear.
+	 */
+	if (sz == 0xffffffff)
+		sz = 0;
+
+	/*
+	 * I don't know how l can have all bits set.  Copied from old code.
+	 * Maybe it fixes a bug on some ancient platform.
+	 */
+	if (l == 0xffffffff)
+		l = 0;
+
+	if (type == pci_bar_unknown) {
+		res->flags = decode_bar(l);
+		res->flags |= IORESOURCE_SIZEALIGN;
+		if (res->flags & IORESOURCE_IO) {
+			l64 = l & PCI_BASE_ADDRESS_IO_MASK;
+			sz64 = sz & PCI_BASE_ADDRESS_IO_MASK;
+			mask64 = PCI_BASE_ADDRESS_IO_MASK & (u32)IO_SPACE_LIMIT;
+		} else {
+			l64 = l & PCI_BASE_ADDRESS_MEM_MASK;
+			sz64 = sz & PCI_BASE_ADDRESS_MEM_MASK;
+			mask64 = (u32)PCI_BASE_ADDRESS_MEM_MASK;
+		}
+	} else {
+		if (l & PCI_ROM_ADDRESS_ENABLE)
+			res->flags |= IORESOURCE_ROM_ENABLE;
+		l64 = l & PCI_ROM_ADDRESS_MASK;
+		sz64 = sz & PCI_ROM_ADDRESS_MASK;
+		mask64 = PCI_ROM_ADDRESS_MASK;
+	}
+
+	if (res->flags & IORESOURCE_MEM_64) {
+		pci_read_config_dword(dev, pos + 4, &l);
+		pci_write_config_dword(dev, pos + 4, ~0);
+		pci_read_config_dword(dev, pos + 4, &sz);
+		pci_write_config_dword(dev, pos + 4, l);
+
+		l64 |= ((u64)l << 32);
+		sz64 |= ((u64)sz << 32);
+		mask64 |= ((u64)~0 << 32);
+	}
+
+	if (mmio_always_on && (orig_cmd & PCI_COMMAND_DECODE_ENABLE))
+		pci_write_config_word(dev, PCI_COMMAND, orig_cmd);
+
+	if (!sz64)
+		goto fail;
+
+	sz64 = pci_size(l64, sz64, mask64);
+	if (!sz64) {
+		pci_info(dev, FW_BUG "reg 0x%x: invalid BAR (can't size)\n",
+			 pos);
+		goto fail;
+	}
+
+	if (res->flags & IORESOURCE_MEM_64) {
+		if ((sizeof(pci_bus_addr_t) < 8 || sizeof(resource_size_t) < 8)
+		    && sz64 > 0x100000000ULL) {
+			res->flags |= IORESOURCE_UNSET | IORESOURCE_DISABLED;
+			res->start = 0;
+			res->end = 0;
+			pci_err(dev, "reg 0x%x: can't handle BAR larger than 4GB (size %#010llx)\n",
+				pos, (unsigned long long)sz64);
+			goto out;
+		}
+
+		if ((sizeof(pci_bus_addr_t) < 8) && l) {
+			/* Above 32-bit boundary; try to reallocate */
+			res->flags |= IORESOURCE_UNSET;
+			res->start = 0;
+			res->end = sz64 - 1;
+			pci_info(dev, "reg 0x%x: can't handle BAR above 4GB (bus address %#010llx)\n",
+				 pos, (unsigned long long)l64);
+			goto out;
+		}
+	}
+
+	region.start = l64;
+	region.end = l64 + sz64 - 1;
+
+	pcibios_bus_to_resource(dev->bus, res, &region);
+	pcibios_resource_to_bus(dev->bus, &inverted_region, res);
+
+	/*
+	 * If "A" is a BAR value (a bus address), "bus_to_resource(A)" is
+	 * the corresponding resource address (the physical address used by
+	 * the CPU.  Converting that resource address back to a bus address
+	 * should yield the original BAR value:
+	 *
+	 *     resource_to_bus(bus_to_resource(A)) == A
+	 *
+	 * If it doesn't, CPU accesses to "bus_to_resource(A)" will not
+	 * be claimed by the device.
+	 */
+	if (inverted_region.start != region.start) {
+		res->flags |= IORESOURCE_UNSET;
+		res->start = 0;
+		res->end = region.end - region.start;
+		pci_info(dev, "reg 0x%x: initial BAR value %#010llx invalid\n",
+			 pos, (unsigned long long)region.start);
+	}
+
+	goto out;
+
+
+fail:
+	res->flags = 0;
+out:
+	if (res->flags)
+		pci_info(dev, "reg 0x%x: %pR\n", pos, res);
+
+	return (res->flags & IORESOURCE_MEM_64) ? 1 : 0;
+}
+
+static void pci_read_bases(pci_info_t* info)
+{
+	unsigned int pos, reg;
+
+	for (pos = 0; pos < 6; pos++) {
+		struct resource *res = &info->resource[pos];
+		reg = PCI_BASE_ADDRESS_0 + (pos << 2);
+		pos += __pci_read_base(info, pci_bar_unknown, res, reg);
+	}
+}
+
 int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsystem_id, pci_info_t* info, int8_t bus_master)
 {
 	uint32_t slot, bus, i;
@@ -169,6 +459,8 @@ int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsyst
 			if (adapters[bus][slot] != -1) {
 				if (((adapters[bus][slot] & 0xffff) == vendor_id) &&
 				    (((adapters[bus][slot] & 0xffff0000) >> 16) == device_id)) {
+					u8 hdr_type;
+
 					if (subsystem_id != PCI_IGNORE_SUBID && pci_subid(bus, slot) != subsystem_id)
 						continue;
 					for(i=0; i<6; i++) {
@@ -178,6 +470,15 @@ int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsyst
 					info->irq = pci_what_irq(bus, slot);
 					if (bus_master)
 						pci_bus_master(bus, slot);
+					info->slot = slot;
+					info->bus = bus;
+
+					pci_read_config_byte(info->bus, info->slot, PCI_HEADER_TYPE, &hdr_type);
+					hdr_type = hdr_type & 0x7f;
+
+					if (hdr_type != PCI_HEADER_TYPE_NORMAL)
+						continue;
+
 					return 0;
 				}
 			}
