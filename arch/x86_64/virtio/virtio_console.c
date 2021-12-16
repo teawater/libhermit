@@ -86,14 +86,13 @@ virtio_console_init(void)
 {
 	int ret;
 	pci_info_t pci_info;
+	bool is_legacy;
 
-	ret = virtio_device_find(&pci_info, VENDOR_ID, VIRTIO_ID_CONSOLE);
+	ret = virtio_device_find(&pci_info, &is_legacy, VENDOR_ID, VIRTIO_ID_CONSOLE);
 	if (ret)
 		goto out;
 
-	virtio_console.iobase = pci_info.base[0];
-
-	ret = virtio_device_setup(&virtio_console);
+	ret = virtio_device_setup(&virtio_console, &pci_info, is_legacy);
 	if (ret)
 		goto out;
 
@@ -101,7 +100,7 @@ virtio_console_init(void)
 
 	spinlock_irqsave_lock(&virtio_console_output_lock);
 	// Don't have input_vq because cannot get data from qemu.
-	output_vq = virtio_setup_vq(&virtio_console, 1,
+	output_vq = virtio_setup_vq(&pci_info, &virtio_console, 1,
 				    output_vq_callback,
 				    "virtio_console_output_vq",
 				    false);

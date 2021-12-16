@@ -36,12 +36,7 @@ struct virtio_vsock_pkt {
 
 static void get_cid(void)
 {
-	uint32_t ioaddr = virtio_vsock.iobase + VIRTIO_PCI_CONFIG_OFF(0);
-	uint8_t *ptr = (uint8_t *)&cid;
-	int i;
-
-	for (i = 0; i < 8; i++)
-		ptr[i] = inportb(ioaddr + i);
+	virtio_vsock.get(&virtio_vsock, 0, (u8 *)&cid, sizeof(cid));
 
 	LOG_INFO("vsock cid is %ld\n", cid);
 }
@@ -67,7 +62,7 @@ static void virtio_vsock_handler(struct state *s)
 
 	/* reading the ISR has the effect of also clearing it so it's very
 	 * important to save off the value. */
-	isr = inportb(virtio_vsock.iobase + VIRTIO_PCI_ISR);
+	isr = virtio_vsock.get_isr(&virtio_vsock);
 
 	/* It's definitely not us if the ISR was not high */
 	if (!isr)
@@ -117,33 +112,35 @@ virtio_vsock_init(void)
 {
 	int ret;
 	pci_info_t pci_info;
+	bool is_legacy;
 
-	ret = virtio_device_find(&pci_info, VENDOR_ID, VIRTIO_ID_VSOCK);
+	ret = virtio_device_find(&pci_info, &is_legacy, VENDOR_ID, VIRTIO_ID_VSOCK);
 	if (ret)
 		goto out;
 
 	virtio_vsock.iobase = pci_info.base[0];
 	
-	ret = virtio_device_setup(&virtio_vsock);
+	ret = virtio_device_setup(&virtio_vsock, &pci_info, is_legacy);
 	if (ret)
 		goto out;
 
-	rx_vq = virtio_setup_vq(&virtio_vsock, VSOCK_VQ_RX, rx_vq_callback,
-				"vsock_rx_vq", false);
+	rx_vq = virtio_setup_vq(&pci_info, &virtio_vsock, VSOCK_VQ_RX,
+				rx_vq_callback, "vsock_rx_vq", false);
 	if (IS_ERR(rx_vq)) {
 		ret = PTR_ERR(rx_vq);
 		goto out;
 	}
 
-	tx_vq = virtio_setup_vq(&virtio_vsock, VSOCK_VQ_TX, tx_vq_callback,
-				"vsock_tx_vq", false);
+	tx_vq = virtio_setup_vq(&pci_info, &virtio_vsock, VSOCK_VQ_TX,
+				tx_vq_callback, "vsock_tx_vq", false);
 	if (IS_ERR(tx_vq)) {
 		ret = PTR_ERR(tx_vq);
 		goto out;
 	}
 
-	event_vq = virtio_setup_vq(&virtio_vsock, VSOCK_VQ_EVENT, event_vq_callback,
-				"vsock_event_vq", false);
+	event_vq = virtio_setup_vq(&pci_info, &virtio_vsock, VSOCK_VQ_EVENT,
+				   event_vq_callback,
+				   "vsock_event_vq", false);
 	if (IS_ERR(event_vq)) {
 		ret = PTR_ERR(event_vq);
 		goto out;

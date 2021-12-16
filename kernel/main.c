@@ -704,8 +704,7 @@ int hermit_main(void)
 
 #ifdef KATA
 	// Call after system_calibration because system_calibration does some cr3 init work.
-	if (virtio_init()) {
-		LOG_INFO("virtio init fail\n");
+	if (virtio_init() != 0) {
 		while(1)
 			HALT;
 	}

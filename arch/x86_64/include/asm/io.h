@@ -47,6 +47,19 @@ extern "C" {
 #define CMOS_PORT_DATA		0x71
 #endif
 
+#define IORESOURCE_TYPE_BITS	0x00001f00	/* Resource type */
+#define IORESOURCE_IO		0x00000100	/* PCI/ISA I/O ports */
+#define IORESOURCE_MEM		0x00000200
+#define IORESOURCE_PREFETCH	0x00002000	/* No side effects */
+#define IORESOURCE_SIZEALIGN	0x00040000	/* size indicates alignment */
+#define IORESOURCE_MEM_64	0x00100000
+#define IORESOURCE_ROM_ENABLE		(1<<0)	/* ROM is enabled, same as PCI_ROM_ADDRESS_ENABLE */
+
+#define IORESOURCE_DISABLED	0x10000000
+#define IORESOURCE_UNSET	0x20000000	/* No address assigned yet */
+#define IORESOURCE_AUTO		0x40000000
+#define IORESOURCE_BUSY		0x80000000	/* Driver has marked this resource busy */
+
 /** @brief Read a byte from an IO port
  *
  * @param _port The port you want to read from
@@ -122,6 +135,65 @@ inline static void cmos_write(uint8_t offset, uint8_t val)
 #define iowrite16(d, p)	outportw(p, d)
 #define iowrite32(d, p)	outportl(p, d)
 #define ioread32(p) inportl(p)
+
+/*
+ * Functions for accessing PCI base (first 256 bytes) and extended
+ * (4096 bytes per PCI function) configuration space with type 1
+ * accesses.
+ */
+
+#define PCI_CONF1_ADDRESS(bus, devfn, reg) \
+	(0x80000000 | ((reg & 0xF00) << 16) | (bus << 16) \
+	| (devfn << 8) | (reg & 0xFC))
+
+inline static void
+pci_bus_read_config_byte(unsigned int bus, unsigned int devfn, int reg, u8 *value)
+{
+	outportl(0xCF8, PCI_CONF1_ADDRESS(bus, devfn, reg));
+	*value = inportb(0xCFC + (reg & 3));
+}
+
+inline static void
+pci_bus_read_config_word(unsigned int bus, unsigned int devfn, int reg, u16 *value)
+{
+	outportl(0xCF8, PCI_CONF1_ADDRESS(bus, devfn, reg));
+	*value = inportw(0xCFC + (reg & 2));
+}
+
+inline static void
+pci_bus_read_config_dword(unsigned int bus, unsigned int devfn, int reg, u32 *value)
+{
+	outportl(0xCF8, PCI_CONF1_ADDRESS(bus, devfn, reg));
+	*value = inportl(0xCFC);
+}
+
+inline static void
+pci_bus_write_config_byte(unsigned int bus, unsigned int devfn, int reg, u8 value)
+{
+	outportl(0xCF8, PCI_CONF1_ADDRESS(bus, devfn, reg));
+	outportb(0xCFC + (reg & 3), value);
+}
+
+inline static void
+pci_bus_write_config_word(unsigned int bus, unsigned int devfn, int reg, u16 value)
+{
+	outportl(0xCF8, PCI_CONF1_ADDRESS(bus, devfn, reg));
+	outportw(0xCFC + (reg & 2), value);
+}
+
+inline static void
+pci_bus_write_config_dword(unsigned int bus, unsigned int devfn, int reg, u32 value)
+{
+	outportl(0xCF8, PCI_CONF1_ADDRESS(bus, devfn, reg));
+	outportl(0xCFC, value);
+}
+
+#define pci_read_config_byte(dev, reg, value)	pci_bus_read_config_byte(dev->bus, dev->devfn, reg, value)
+#define pci_read_config_word(dev, reg, value)	pci_bus_read_config_word(dev->bus, dev->devfn, reg, value)
+#define pci_read_config_dword(dev, reg, value)	pci_bus_read_config_dword(dev->bus, dev->devfn, reg, value)
+#define pci_write_config_byte(dev, reg, value)	pci_bus_write_config_byte(dev->bus, dev->devfn, reg, value)
+#define pci_write_config_word(dev, reg, value)	pci_bus_write_config_word(dev->bus, dev->devfn, reg, value)
+#define pci_write_config_dword(dev, reg, value)	pci_bus_write_config_dword(dev->bus, dev->devfn, reg, value)
 
 #ifdef __cplusplus
 }
