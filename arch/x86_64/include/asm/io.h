@@ -123,6 +123,65 @@ inline static void cmos_write(uint8_t offset, uint8_t val)
 #define iowrite32(d, p)	outportl(p, d)
 #define ioread32(p) inportl(p)
 
+/*
+ * Functions for accessing PCI base (first 256 bytes) and extended
+ * (4096 bytes per PCI function) configuration space with type 1
+ * accesses.
+ */
+
+#define PCI_CONF1_ADDRESS(bus, devfn, reg) \
+	(0x80000000 | ((reg & 0xF00) << 16) | (bus << 16) \
+	| (devfn << 8) | (reg & 0xFC))
+
+inline static void
+pci_bus_read_config_byte(unsigned int bus, unsigned int devfn, int reg, u8 *value)
+{
+	outportl(PCI_CONF1_ADDRESS(bus, devfn, reg), 0xCF8);
+	*value = inportb(0xCFC + (reg & 3));
+}
+
+inline static void
+pci_bus_read_config_word(unsigned int bus, unsigned int devfn, int reg, u16 *value)
+{
+	outportl(PCI_CONF1_ADDRESS(bus, devfn, reg), 0xCF8);
+	*value = inportw(0xCFC + (reg & 2));
+}
+
+inline static void
+pci_bus_read_config_dword(unsigned int bus, unsigned int devfn, int reg, u32 *value)
+{
+	outportl(PCI_CONF1_ADDRESS(bus, devfn, reg), 0xCF8);
+	*value = inportl(0xCFC);
+}
+
+inline static void
+pci_bus_write_config_byte(unsigned int bus, unsigned int devfn, int reg, u8 value)
+{
+	outportl(PCI_CONF1_ADDRESS(bus, devfn, reg), 0xCF8);
+	outportb(0xCFC + (reg & 3), value);
+}
+
+inline static void
+pci_bus_write_config_word(unsigned int bus, unsigned int devfn, int reg, u16 value)
+{
+	outportl(PCI_CONF1_ADDRESS(bus, devfn, reg), 0xCF8);
+	outportw(0xCFC + (reg & 2), value);
+}
+
+inline static void
+pci_bus_write_config_dword(unsigned int bus, unsigned int devfn, int reg, u32 value)
+{
+	outportl(PCI_CONF1_ADDRESS(bus, devfn, reg), 0xCF8);
+	outportl(0xCFC, value);
+}
+
+#define pci_read_config_byte(dev, reg, value)	pci_bus_read_config_byte(dev->bus, dev->slot, reg, value)
+#define pci_read_config_word(dev, reg, value)	pci_bus_read_config_word(dev->bus, dev->slot, reg, value)
+#define pci_read_config_dword(dev, reg, value)	pci_bus_read_config_dword(dev->bus, dev->slot, reg, value)
+#define pci_write_config_byte(dev, reg, value)	pci_bus_write_config_byte(dev->bus, dev->slot, reg, value)
+#define pci_write_config_word(dev, reg, value)	pci_bus_write_config_word(dev->bus, dev->slot, reg, value)
+#define pci_write_config_dword(dev, reg, value)	pci_bus_write_config_dword(dev->bus, dev->slot, reg, value)
+
 #ifdef __cplusplus
 }
 #endif

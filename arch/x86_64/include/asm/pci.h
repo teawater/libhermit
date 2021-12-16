@@ -42,10 +42,21 @@
 extern "C" {
 #endif
 
+struct resource {
+	resource_size_t start;
+	resource_size_t end;
+	unsigned long flags;
+	unsigned long desc;
+	struct resource *parent, *sibling, *child;
+};
+
 typedef struct {
 	uint32_t base[6];
 	uint32_t size[6];
 	uint32_t irq;
+
+	uint32_t slot, bus;
+	struct resource resource[6];
 } pci_info_t;
 
 #define PCI_IGNORE_SUBID	(0)
