@@ -156,6 +156,7 @@ virtio_vsock_init(void)
 	get_cid();
 
 	irq_install_handler(pci_info.irq + 32, virtio_vsock_handler);
+	LOG_INFO("vsock irq is %d\n", pci_info.irq);
 
 	virtio_device_ready(&virtio_vsock);
 
