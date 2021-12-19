@@ -390,7 +390,7 @@ static apic_mp_t* search_mptable(size_t base, size_t limit) {
 
 		for(i=0; (vptr) && (i<PAGE_SIZE); i+=4) {
 			tmp = (apic_mp_t*) (vptr+i);
-			if (tmp->signature == MP_FLT_SIGNATURE) {
+			if (tmp->signature == SMP_MAGIC_IDENT) {
 				if (!((tmp->version > 4) || (tmp->features[0])))
 					return tmp;
 			}
