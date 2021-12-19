@@ -104,6 +104,7 @@ extern "C" {
 #define APIC_VECTOR_MASK	0x000FF
 
 /** @brief MP Floating Pointer Structure */
+/* same with struct mpf_intel */
 typedef struct {
 	uint32_t signature;
 	uint32_t mp_config;
