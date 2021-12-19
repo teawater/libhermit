@@ -34,7 +34,8 @@
 extern "C" {
 #endif
 
-#define MP_FLT_SIGNATURE	0x5f504d5f
+//#define MP_FLT_SIGNATURE	0x5f504d5f
+#define SMP_MAGIC_IDENT	(('_'<<24) | ('P'<<16) | ('M'<<8) | '_')
 
 /// Local APIC ID Register
 #define APIC_ID			0x0020
