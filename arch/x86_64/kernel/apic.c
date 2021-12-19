@@ -359,6 +359,20 @@ int apic_enable_timer(void)
 	return -EINVAL;
 }
 
+/*
+ * Checksum an MP configuration block.
+ */
+
+static int mpf_checksum(unsigned char *mp, int len)
+{
+	int sum = 0;
+
+	while (len--)
+		sum += *mp++;
+
+	return sum & 0xFF;
+}
+
 static apic_mp_t* search_mptable(size_t base, size_t limit) {
 	size_t ptr=PAGE_FLOOR(base), old_ptr = 0;
 	size_t flags = PG_GLOBAL | PG_RW | PG_PCD;
@@ -388,12 +402,13 @@ static apic_mp_t* search_mptable(size_t base, size_t limit) {
 			return NULL;
 		}
 
-		for(i=0; (vptr) && (i<PAGE_SIZE); i+=4) {
+		for(i=0; (vptr) && (i<PAGE_SIZE); i+=16) {
 			tmp = (apic_mp_t*) (vptr+i);
-			if (tmp->signature == SMP_MAGIC_IDENT) {
-				if (!((tmp->version > 4) || (tmp->features[0])))
-					return tmp;
-			}
+			if (tmp->signature == SMP_MAGIC_IDENT &&
+			    tmp->length == 1 &&
+			    !mpf_checksum((unsigned char *)tmp, 16) &&
+			    ((tmp->version == 1) || (tmp->version == 4)))
+				return tmp;
 		}
 
 		ptr += PAGE_SIZE;
