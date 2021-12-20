@@ -116,6 +116,7 @@ typedef struct {
 } __attribute__ ((packed)) apic_mp_t;
 
 /** @brief MP Configuration Table */
+/* same with struct mpc_table */
 typedef struct {
 	uint32_t signature;
 	uint16_t length;
@@ -143,6 +144,7 @@ typedef struct {
 } __attribute__ ((packed)) apic_processor_entry_t;
 
 /** @brief IO APIC Entry */
+/* same with struct mpc_ioapic */
 typedef struct {
 	uint8_t type;
 	uint8_t id;
@@ -159,6 +161,7 @@ typedef struct {
 } __attribute__ ((packed)) apic_bus_entry_t;
 
 /** @brief I/O Interrupt Assignment Entry */
+/* same with struct mpc_intsrc */
 typedef struct {
 	uint8_t type;	// type = 3
 	uint8_t itype;	// interrupt type
