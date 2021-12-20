@@ -172,6 +172,7 @@ typedef struct {
 	uint8_t dest_intin;	// which pin it gets sent to on the IO APIC
 } __attribute__ ((packed)) apic_ioirq_entry_t;
 
+/* same with struct IO_APIC_route_entry */
 typedef struct {
 	union {
 		struct {
