@@ -193,9 +193,9 @@ typedef struct {
 	} lower;
 	union {
 		struct {
-			uint32_t __reserved_1	: 24,
-			physical_dest		:  4,
-			__reserved_2		:  4;
+			uint32_t __reserved_1	: 17,
+			virt_destid_8_14	:  7,
+			physical_dest		:  8;
 		} physical;
 
 		struct {
