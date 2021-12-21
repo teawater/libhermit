@@ -1173,6 +1173,7 @@ int ioapic_inton(uint8_t irq, uint8_t apicid)
 		off = irq_redirect[irq]*2;
 	else
 		off = irq*2;
+	memset(&route, 0, sizeof(ioapic_route_t));
 #if 0
 	route.lower.whole = ioapic_read(IOAPIC_REG_TABLE+1+off);
 	route.dest.upper = ioapic_read(IOAPIC_REG_TABLE+off);
@@ -1212,6 +1213,7 @@ int ioapic_intoff(uint8_t irq, uint8_t apicid)
 	else
 		off = irq*2;
 
+	memset(&route, 0, sizeof(ioapic_route_t));
 #if 0
 	route.lower.whole = ioapic_read(IOAPIC_REG_TABLE+1+off);
 	route.dest.upper = ioapic_read(IOAPIC_REG_TABLE+off);
