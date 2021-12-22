@@ -186,12 +186,12 @@ int pci_init(void)
 
 /* Header type 0 (normal devices) */
 #define PCI_CARDBUS_CIS		0x28
-#define PCI_SUBSYSTEM_VENDOR_ID	0x2c
 #define PCI_SUBSYSTEM_ID	0x2e
 #define PCI_ROM_ADDRESS		0x30	/* Bits 31..11 are address, 10..1 reserved */
 #define PCI_ROM_ADDRESS_ENABLE	0x01
 #define PCI_ROM_ADDRESS_MASK	(~0x7ffU)
 
+#define IORESOURCE_TYPE_BITS	0x00001f00	/* Resource type */
 #define IORESOURCE_IO		0x00000100	/* PCI/ISA I/O ports */
 #define IORESOURCE_MEM		0x00000200
 #define IORESOURCE_PREFETCH	0x00002000	/* No side effects */
@@ -254,30 +254,26 @@ static inline unsigned long decode_bar(u32 bar)
 	return flags;
 }
 
-void pcibios_bus_to_resource(struct pci_bus *bus, struct resource *res,
-			     struct pci_bus_region *region)
+static u64 pci_size(u64 base, u64 maxbase, u64 mask)
 {
-	struct pci_host_bridge *bridge = pci_find_host_bridge(bus);
-	struct resource_entry *window;
-	resource_size_t offset = 0;
+	u64 size = mask & maxbase;	/* Find the significant bits */
+	if (!size)
+		return 0;
 
-	resource_list_for_each_entry(window, &bridge->windows) {
-		struct pci_bus_region bus_region;
+	/*
+	 * Get the lowest of them to find the decode size, and from that
+	 * the extent.
+	 */
+	size = size & ~(size-1);
 
-		if (resource_type(res) != resource_type(window->res))
-			continue;
+	/*
+	 * base == maxbase can be valid only if the BAR has already been
+	 * programmed with all 1s.
+	 */
+	if (base == maxbase && ((base | (size - 1)) & mask) != mask)
+		return 0;
 
-		bus_region.start = window->res->start - window->offset;
-		bus_region.end = window->res->end - window->offset;
-
-		if (region_contains(&bus_region, region)) {
-			offset = window->offset;
-			break;
-		}
-	}
-
-	res->start = region->start + offset;
-	res->end = region->end + offset;
+	return size;
 }
 
 /**
@@ -399,8 +395,9 @@ int __pci_read_base(pci_info_t* dev, enum pci_bar_type type,
 	region.start = l64;
 	region.end = l64 + sz64 - 1;
 
-	pcibios_bus_to_resource(dev->bus, res, &region);
-	pcibios_resource_to_bus(dev->bus, &inverted_region, res);
+	// Do not do this work because just support legacy bus
+	//pcibios_bus_to_resource(dev->bus, res, &region);
+	//pcibios_resource_to_bus(dev->bus, &inverted_region, res);
 
 	/*
 	 * If "A" is a BAR value (a bus address), "bus_to_resource(A)" is
@@ -473,11 +470,13 @@ int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsyst
 					info->slot = slot;
 					info->bus = bus;
 
-					pci_read_config_byte(info->bus, info->slot, PCI_HEADER_TYPE, &hdr_type);
+					pci_read_config_byte(info, PCI_HEADER_TYPE, &hdr_type);
 					hdr_type = hdr_type & 0x7f;
 
 					if (hdr_type != PCI_HEADER_TYPE_NORMAL)
 						continue;
+
+					pci_read_bases(info);
 
 					return 0;
 				}
