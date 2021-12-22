@@ -395,7 +395,7 @@ int __pci_read_base(pci_info_t* dev, enum pci_bar_type type,
 	region.start = l64;
 	region.end = l64 + sz64 - 1;
 
-	// Do not do this work because just support legacy bus
+	//XXX: Do not do this work because just support legacy bus
 	//pcibios_bus_to_resource(dev->bus, res, &region);
 	//pcibios_resource_to_bus(dev->bus, &inverted_region, res);
 
@@ -430,7 +430,7 @@ out:
 	return (res->flags & IORESOURCE_MEM_64) ? 1 : 0;
 }
 
-static void pci_read_bases(pci_info_t* info)
+void pci_read_bases(pci_info_t* info)
 {
 	unsigned int pos, reg;
 
@@ -450,6 +450,8 @@ int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsyst
 
 	if (!mechanism && !is_uhyve())
 		pci_init();
+
+	memset(info, 0, sizeof(pci_info_t));
 
 	for (bus = 0; bus < MAX_BUS; bus++) {
 		for (slot = 0; slot < MAX_SLOTS; slot++) {
@@ -472,11 +474,8 @@ int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsyst
 
 					pci_read_config_byte(info, PCI_HEADER_TYPE, &hdr_type);
 					hdr_type = hdr_type & 0x7f;
-
-					if (hdr_type != PCI_HEADER_TYPE_NORMAL)
-						continue;
-
-					pci_read_bases(info);
+					//if (hdr_type != PCI_HEADER_TYPE_NORMAL)
+					//	continue;
 
 					return 0;
 				}

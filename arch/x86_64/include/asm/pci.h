@@ -47,7 +47,6 @@ struct resource {
 	resource_size_t end;
 	unsigned long flags;
 	unsigned long desc;
-	struct resource *parent, *sibling, *child;
 };
 
 typedef struct {
@@ -84,6 +83,8 @@ int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsyst
  * @return 0 in any case
  */
 int print_pci_adapters(void);
+
+void pci_read_bases(pci_info_t* info);
 
 #ifdef __cplusplus
 }

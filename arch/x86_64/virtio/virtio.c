@@ -128,7 +128,7 @@ out:
 int
 virtio_device_find(pci_info_t *pci_info, bool *is_legacy, uint32_t vendor_id, uint32_t device_id)
 {
-	int i, ret = -ENXIO;
+	int i, ret = 0;
 
 	/* Qumranet donated their vendor ID for devices 0x1000 thru 0x10FF. */
 	for(i = 0; i < 0x1040; i++) {
@@ -136,15 +136,16 @@ virtio_device_find(pci_info_t *pci_info, bool *is_legacy, uint32_t vendor_id, ui
 					 device_id << 16 | vendor_id,
 					 pci_info, 1) == 0) {
 			*is_legacy = true;
-			break;
+			goto out;
 		}
 	}
-	if (i >= 0x1040 && pci_get_device_info(vendor_id, 0x1040 + device_id, PCI_IGNORE_SUBID, pci_info, 1) != 0) {
+	if (i >= 0x1040 && pci_get_device_info(vendor_id, 0x1040 + device_id, PCI_IGNORE_SUBID, pci_info, 1) == 0) {
+		*is_legacy = false;
+		pci_read_bases(pci_info);
 		goto out;
 	}
-	*is_legacy = false;
 
-	ret = 0;
+	ret = -ENXIO;
 out:
 	return ret;
 }
