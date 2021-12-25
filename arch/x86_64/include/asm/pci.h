@@ -42,6 +42,11 @@
 extern "C" {
 #endif
 
+#define PCI_HEADER_TYPE		0x0e	/* 8 bits */
+#define  PCI_HEADER_TYPE_NORMAL		0
+#define  PCI_HEADER_TYPE_BRIDGE		1
+#define  PCI_HEADER_TYPE_CARDBUS	2
+
 struct resource {
 	resource_size_t start;
 	resource_size_t end;
@@ -54,7 +59,7 @@ typedef struct {
 	uint32_t size[6];
 	uint32_t irq;
 
-	uint32_t slot, bus;
+	uint32_t devfn, bus;
 	struct resource resource[6];
 } pci_info_t;
 

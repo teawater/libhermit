@@ -62,7 +62,7 @@
 
 #define PCI_IO_CONF_START	0xc000
 
-#define MAX_BUS			16
+#define MAX_BUS			1
 #define MAX_SLOTS		32
 
 static uint32_t mechanism = 0;
@@ -154,8 +154,6 @@ int pci_init(void)
 	return 0;
 }
 
-#define PCI_HEADER_TYPE		0x0e	/* 8 bits */
-#define PCI_HEADER_TYPE_NORMAL	0
 #define PCI_COMMAND		0x04	/* 16 bits */
 #define PCI_COMMAND_IO		0x1	/* Enable response in I/O space */
 #define PCI_COMMAND_MEMORY	0x2	/* Enable response in Memory space */
@@ -190,19 +188,6 @@ int pci_init(void)
 #define PCI_ROM_ADDRESS		0x30	/* Bits 31..11 are address, 10..1 reserved */
 #define PCI_ROM_ADDRESS_ENABLE	0x01
 #define PCI_ROM_ADDRESS_MASK	(~0x7ffU)
-
-#define IORESOURCE_TYPE_BITS	0x00001f00	/* Resource type */
-#define IORESOURCE_IO		0x00000100	/* PCI/ISA I/O ports */
-#define IORESOURCE_MEM		0x00000200
-#define IORESOURCE_PREFETCH	0x00002000	/* No side effects */
-#define IORESOURCE_SIZEALIGN	0x00040000	/* size indicates alignment */
-#define IORESOURCE_MEM_64	0x00100000
-#define IORESOURCE_ROM_ENABLE		(1<<0)	/* ROM is enabled, same as PCI_ROM_ADDRESS_ENABLE */
-
-#define IORESOURCE_DISABLED	0x10000000
-#define IORESOURCE_UNSET	0x20000000	/* No address assigned yet */
-#define IORESOURCE_AUTO		0x40000000
-#define IORESOURCE_BUSY		0x80000000	/* Driver has marked this resource busy */
 
 #define IO_SPACE_LIMIT 0xffffffff
 
@@ -469,13 +454,13 @@ int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsyst
 					info->irq = pci_what_irq(bus, slot);
 					if (bus_master)
 						pci_bus_master(bus, slot);
-					info->slot = slot;
+					info->devfn = slot << 3;
 					info->bus = bus;
 
 					pci_read_config_byte(info, PCI_HEADER_TYPE, &hdr_type);
 					hdr_type = hdr_type & 0x7f;
-					//if (hdr_type != PCI_HEADER_TYPE_NORMAL)
-					//	continue;
+					if (hdr_type != PCI_HEADER_TYPE_NORMAL)
+						continue;
 
 					return 0;
 				}

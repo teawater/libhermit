@@ -7,76 +7,6 @@
 
 #if 0
 
-/**
- * pci_find_capability - query for devices' capabilities
- * @dev: PCI device to query
- * @cap: capability code
- *
- * Tell if a device supports a given PCI capability.
- * Returns the address of the requested capability structure within the
- * device's PCI configuration space or 0 in case the device does not
- * support it.  Possible values for @cap include:
- *
- *  %PCI_CAP_ID_PM           Power Management
- *  %PCI_CAP_ID_AGP          Accelerated Graphics Port
- *  %PCI_CAP_ID_VPD          Vital Product Data
- *  %PCI_CAP_ID_SLOTID       Slot Identification
- *  %PCI_CAP_ID_MSI          Message Signalled Interrupts
- *  %PCI_CAP_ID_CHSWP        CompactPCI HotSwap
- *  %PCI_CAP_ID_PCIX         PCI-X
- *  %PCI_CAP_ID_EXP          PCI Express
- */
-u8 pci_find_capability(pci_info_t* pci_info, int cap)
-{
-	u8 pos;
-
-	pos = __pci_bus_find_cap_start(pci_info->bus, dev->devfn, dev->hdr_type);
-	if (pos)
-		pos = __pci_find_next_cap(dev->bus, dev->devfn, pos, cap);
-
-	return pos;
-}
-
-/**
- * virtio_pci_find_capability - walk capabilities to find device info.
- * @dev: the pci device
- * @cfg_type: the VIRTIO_PCI_CAP_* value we seek
- * @ioresource_types: IORESOURCE_MEM and/or IORESOURCE_IO.
- * @bars: the bitmask of BARs
- *
- * Returns offset of the capability, or 0.
- */
-static inline int virtio_pci_find_capability(struct pci_dev *dev, u8 cfg_type,
-					     u32 ioresource_types, int *bars)
-{
-	int pos;
-
-	for (pos = pci_find_capability(dev, PCI_CAP_ID_VNDR);
-	     pos > 0;
-	     pos = pci_find_next_capability(dev, pos, PCI_CAP_ID_VNDR)) {
-		u8 type, bar;
-		pci_read_config_byte(dev, pos + offsetof(struct virtio_pci_cap,
-							 cfg_type),
-				     &type);
-		pci_read_config_byte(dev, pos + offsetof(struct virtio_pci_cap,
-							 bar),
-				     &bar);
-
-		/* Ignore structures with reserved BAR values */
-		if (bar > 0x5)
-			continue;
-
-		if (type == cfg_type) {
-			if (pci_resource_len(dev, bar) &&
-			    pci_resource_flags(dev, bar) & ioresource_types) {
-				*bars |= (1 << bar);
-				return pos;
-			}
-		}
-	}
-	return 0;
-}
-
 /*
  * vp_modern_map_capability - map a part of virtio pci capability
  * @mdev: the modern virtio-pci device
@@ -171,8 +101,174 @@ static void vp_set_status(struct virtio_device *vdev, uint8_t status)
 
 #endif
 
+#define PCI_STATUS		0x06	/* 16 bits */
+#define  PCI_STATUS_CAP_LIST	0x10	/* Support Capability List */
+#define PCI_CAPABILITY_LIST	0x34	/* Offset of first capability list entry */
+#define PCI_CB_CAPABILITY_LIST	0x14
+#define PCI_FIND_CAP_TTL	48
+#define  PCI_CAP_ID_VNDR	0x09	/* Vendor-Specific */
+#define PCI_CAP_LIST_NEXT	1	/* Next capability in the list */
+
+/*
+ * These helpers provide future and backwards compatibility
+ * for accessing popular PCI BAR info
+ */
+#define pci_resource_start(dev, bar)	((dev)->resource[(bar)].start)
+#define pci_resource_end(dev, bar)	((dev)->resource[(bar)].end)
+#define pci_resource_flags(dev, bar)	((dev)->resource[(bar)].flags)
+#define pci_resource_len(dev,bar) \
+	((pci_resource_end((dev), (bar)) == 0) ? 0 :	\
+							\
+	 (pci_resource_end((dev), (bar)) -		\
+	  pci_resource_start((dev), (bar)) + 1))
+
+/* This is the PCI capability header: */
+struct virtio_pci_cap {
+	__u8 cap_vndr;		/* Generic PCI field: PCI_CAP_ID_VNDR */
+	__u8 cap_next;		/* Generic PCI field: next ptr. */
+	__u8 cap_len;		/* Generic PCI field: capability length */
+	__u8 cfg_type;		/* Identifies the structure. */
+	__u8 bar;		/* Where to find it. */
+	__u8 id;		/* Multiple capabilities of the same type */
+	__u8 padding[2];	/* Pad to full dword. */
+	__le32 offset;		/* Offset within bar. */
+	__le32 length;		/* Length of the structure, in bytes. */
+};
+
+static u8 __pci_find_next_cap_ttl(uint32_t bus, unsigned int devfn,
+				  u8 pos, int cap, int *ttl)
+{
+	u8 id;
+	u16 ent;
+
+	pci_bus_read_config_byte(bus, devfn, pos, &pos);
+
+	while ((*ttl)--) {
+		if (pos < 0x40)
+			break;
+		pos &= ~3;
+		pci_bus_read_config_word(bus, devfn, pos, &ent);
+
+		id = ent & 0xff;
+		if (id == 0xff)
+			break;
+		if (id == cap)
+			return pos;
+		pos = (ent >> 8);
+	}
+	return 0;
+}
+
+static u8 __pci_find_next_cap(uint32_t bus, unsigned int devfn,
+			      u8 pos, int cap)
+{
+	int ttl = PCI_FIND_CAP_TTL;
+
+	return __pci_find_next_cap_ttl(bus, devfn, pos, cap, &ttl);
+}
+
+static u8 __pci_bus_find_cap_start(uint32_t bus,
+				   unsigned int devfn, u8 hdr_type)
+{
+	u16 status;
+
+	pci_bus_read_config_word(bus, devfn, PCI_STATUS, &status);
+	if (!(status & PCI_STATUS_CAP_LIST))
+		return 0;
+
+	switch (hdr_type) {
+	case PCI_HEADER_TYPE_NORMAL:
+	case PCI_HEADER_TYPE_BRIDGE:
+		return PCI_CAPABILITY_LIST;
+	case PCI_HEADER_TYPE_CARDBUS:
+		return PCI_CB_CAPABILITY_LIST;
+	}
+
+	return 0;
+}
+
+/**
+ * pci_find_capability - query for devices' capabilities
+ * @dev: PCI device to query
+ * @cap: capability code
+ *
+ * Tell if a device supports a given PCI capability.
+ * Returns the address of the requested capability structure within the
+ * device's PCI configuration space or 0 in case the device does not
+ * support it.  Possible values for @cap include:
+ *
+ *  %PCI_CAP_ID_PM           Power Management
+ *  %PCI_CAP_ID_AGP          Accelerated Graphics Port
+ *  %PCI_CAP_ID_VPD          Vital Product Data
+ *  %PCI_CAP_ID_SLOTID       Slot Identification
+ *  %PCI_CAP_ID_MSI          Message Signalled Interrupts
+ *  %PCI_CAP_ID_CHSWP        CompactPCI HotSwap
+ *  %PCI_CAP_ID_PCIX         PCI-X
+ *  %PCI_CAP_ID_EXP          PCI Express
+ */
+u8 pci_find_capability(pci_info_t* dev, int cap)
+{
+	u8 pos;
+
+	pos = __pci_bus_find_cap_start(dev->bus, dev->devfn, PCI_HEADER_TYPE_NORMAL);
+	if (pos)
+		pos = __pci_find_next_cap(dev->bus, dev->devfn, pos, cap);
+
+	return pos;
+}
+
+u8 pci_find_next_capability(pci_info_t *dev, u8 pos, int cap)
+{
+	return __pci_find_next_cap(dev->bus, dev->devfn,
+				   pos + PCI_CAP_LIST_NEXT, cap);
+}
+
+/**
+ * virtio_pci_find_capability - walk capabilities to find device info.
+ * @dev: the pci device
+ * @cfg_type: the VIRTIO_PCI_CAP_* value we seek
+ * @ioresource_types: IORESOURCE_MEM and/or IORESOURCE_IO.
+ * @bars: the bitmask of BARs
+ *
+ * Returns offset of the capability, or 0.
+ */
+static inline int virtio_pci_find_capability(pci_info_t* dev, u8 cfg_type,
+					     u32 ioresource_types, int *bars)
+{
+	int pos;
+
+	for (pos = pci_find_capability(dev, PCI_CAP_ID_VNDR);
+	     pos > 0;
+	     pos = pci_find_next_capability(dev, pos, PCI_CAP_ID_VNDR)) {
+		u8 type, bar;
+		pci_read_config_byte(dev, pos + offsetof(struct virtio_pci_cap,
+							 cfg_type),
+				     &type);
+		pci_read_config_byte(dev, pos + offsetof(struct virtio_pci_cap,
+							 bar),
+				     &bar);
+
+		/* Ignore structures with reserved BAR values */
+		if (bar > 0x5)
+			continue;
+
+		if (type == cfg_type) {
+			if (pci_resource_len(dev, bar) &&
+			    pci_resource_flags(dev, bar) & ioresource_types) {
+				*bars |= (1 << bar);
+				return pos;
+			}
+		}
+	}
+	return 0;
+}
+
 void
 virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 {
-	//vdev->set_status = vp_set_status;
+	int common, modern_bars = 0;
+
+	common = virtio_pci_find_capability(pci_info, VIRTIO_PCI_CAP_COMMON_CFG,
+					    IORESOURCE_IO | IORESOURCE_MEM,
+					    &modern_bars);
 }
