@@ -276,7 +276,7 @@ int __pci_read_base(pci_info_t* dev, enum pci_bar_type type,
 	u32 l = 0, sz = 0, mask;
 	u64 l64, sz64, mask64;
 	u16 orig_cmd;
-	struct pci_bus_region region, inverted_region;
+	//struct pci_bus_region region, inverted_region;
 	bool mmio_always_on = false;
 
 	mask = type ? PCI_ROM_ADDRESS_MASK : ~0;
@@ -377,12 +377,13 @@ int __pci_read_base(pci_info_t* dev, enum pci_bar_type type,
 		}
 	}
 
+	//XXX: Do not do this work because just support legacy bus
+#if 0
 	region.start = l64;
 	region.end = l64 + sz64 - 1;
 
-	//XXX: Do not do this work because just support legacy bus
-	//pcibios_bus_to_resource(dev->bus, res, &region);
-	//pcibios_resource_to_bus(dev->bus, &inverted_region, res);
+	pcibios_bus_to_resource(dev->bus, res, &region);
+	pcibios_resource_to_bus(dev->bus, &inverted_region, res);
 
 	/*
 	 * If "A" is a BAR value (a bus address), "bus_to_resource(A)" is
@@ -402,6 +403,10 @@ int __pci_read_base(pci_info_t* dev, enum pci_bar_type type,
 		pci_info(dev, "reg 0x%x: initial BAR value %#010llx invalid\n",
 			 pos, (unsigned long long)region.start);
 	}
+#else
+	res->start = l64;
+	res->end = l64 + sz64 - 1;
+#endif
 
 	goto out;
 

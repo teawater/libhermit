@@ -343,7 +343,7 @@ extern int virtio_device_find(pci_info_t *pci_info, bool *is_legacy, uint32_t ve
 
 extern void virtio_device_ready(struct virtio_device *vdev);
 
-extern void virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info);
+extern int virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info);
 extern void virtio_pci_legacy_init(struct virtio_device *vdev);
 
 #endif

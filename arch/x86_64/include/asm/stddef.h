@@ -229,6 +229,7 @@ void print_cpu_status(int isle);
 #define dma_addr_t uint64_t
 typedef u64 resource_size_t;
 typedef u64 pci_bus_addr_t;
+#define __iomem
 
 /**
  * enum irqreturn

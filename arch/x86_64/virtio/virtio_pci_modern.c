@@ -7,92 +7,7 @@
 
 #if 0
 
-/*
- * vp_modern_map_capability - map a part of virtio pci capability
- * @mdev: the modern virtio-pci device
- * @off: offset of the capability
- * @minlen: minimal length of the capability
- * @align: align requirement
- * @start: start from the capability
- * @size: map size
- * @len: the length that is actually mapped
- * @pa: physical address of the capability
- *
- * Returns the io address of for the part of the capability
- */
-static void *
-vp_modern_map_capability(pci_info_t* pci_info, int off,
-			 size_t minlen, u32 align, u32 start, u32 size,
-			 size_t *len, resource_size_t *pa)
-{
-	u8 bar;
-	u32 offset, length;
-	void *p;
 
-	pci_read_config_byte(pci_info->bus, pci_info->slot,
-			     off + offsetof(struct virtio_pci_cap, bar),
-			     &bar);
-	pci_read_config_dword(pci_info->bus, pci_info->slot,
-			      off + offsetof(struct virtio_pci_cap, offset),
-			      &offset);
-	pci_read_config_dword(pci_info->bus, pci_info->slot,
-			      off + offsetof(struct virtio_pci_cap, length),
-			      &length);
-
-	if (length <= start) {
-		dev_err("virtio_pci: bad capability len %u (>%u expected)\n",
-			length, start);
-		return NULL;
-	}
-
-	if (length - start < minlen) {
-		dev_err("virtio_pci: bad capability len %u (>=%zu expected)\n",
-			length, minlen);
-		return NULL;
-	}
-
-	length -= start;
-
-	if (start + offset < offset) {
-		dev_err("virtio_pci: map wrap-around %u+%u\n",
-			start, offset);
-		return NULL;
-	}
-
-	offset += start;
-
-	if (offset & (align - 1)) {
-		dev_err("virtio_pci: offset %u not aligned to %u\n",
-			offset, align);
-		return NULL;
-	}
-
-	if (length > size)
-		length = size;
-
-	if (len)
-		*len = length;
-
-	if (minlen + offset < minlen ||
-	    minlen + offset > pci_resource_len(dev, bar)) {
-		dev_err(&dev->dev,
-			"virtio_pci: map virtio %zu@%u "
-			"out of range on bar %i length %lu\n",
-			minlen, offset,
-			bar, (unsigned long)pci_resource_len(dev, bar));
-		return NULL;
-	}
-
-	p = pci_iomap_range(dev, bar, offset, length);
-	if (!p)
-		dev_err(&dev->dev,
-			"virtio_pci: unable to map virtio %u@%u on bar %i\n",
-			length, offset, bar);
-	else if (pa)
-		*pa = pci_resource_start(dev, bar) + offset;
-
-	return p;
-}
 
 static void vp_set_status(struct virtio_device *vdev, uint8_t status)
 {
@@ -133,6 +48,32 @@ struct virtio_pci_cap {
 	__u8 padding[2];	/* Pad to full dword. */
 	__le32 offset;		/* Offset within bar. */
 	__le32 length;		/* Length of the structure, in bytes. */
+};
+
+/* Fields in VIRTIO_PCI_CAP_COMMON_CFG: */
+struct virtio_pci_common_cfg {
+	/* About the whole device. */
+	__le32 device_feature_select;	/* read-write */
+	__le32 device_feature;		/* read-only */
+	__le32 guest_feature_select;	/* read-write */
+	__le32 guest_feature;		/* read-write */
+	__le16 msix_config;		/* read-write */
+	__le16 num_queues;		/* read-only */
+	__u8 device_status;		/* read-write */
+	__u8 config_generation;		/* read-only */
+
+	/* About a specific virtqueue. */
+	__le16 queue_select;		/* read-write */
+	__le16 queue_size;		/* read-write, power of 2. */
+	__le16 queue_msix_vector;	/* read-write */
+	__le16 queue_enable;		/* read-write */
+	__le16 queue_notify_off;	/* read-only */
+	__le32 queue_desc_lo;		/* read-write */
+	__le32 queue_desc_hi;		/* read-write */
+	__le32 queue_avail_lo;		/* read-write */
+	__le32 queue_avail_hi;		/* read-write */
+	__le32 queue_used_lo;		/* read-write */
+	__le32 queue_used_hi;		/* read-write */
 };
 
 static u8 __pci_find_next_cap_ttl(uint32_t bus, unsigned int devfn,
@@ -263,12 +204,168 @@ static inline int virtio_pci_find_capability(pci_info_t* dev, u8 cfg_type,
 	return 0;
 }
 
-void
+static void *ioremap(resource_size_t start, resource_size_t len)
+{
+	size_t vaddr;
+	size_t page_start = PAGE_FLOOR(start);
+
+	len = PAGE_CEIL(len);
+
+	vaddr = vma_alloc(len, VMA_READ|VMA_WRITE);
+	if (vaddr == 0)
+		return NULL;
+
+	if (page_map(vaddr, page_start, len >> PAGE_BITS, PG_RW|PG_GLOBAL|PG_PCD|PG_NX) != 0)
+		return NULL;
+
+	return vaddr + start - page_start;
+}
+
+/**
+ * pci_iomap_range - create a virtual mapping cookie for a PCI BAR
+ * @dev: PCI device that owns the BAR
+ * @bar: BAR number
+ * @offset: map memory at the given offset in BAR
+ * @maxlen: max length of the memory to map
+ *
+ * Using this function you will get a __iomem address to your device BAR.
+ * You can access it using ioread*() and iowrite*(). These functions hide
+ * the details if this is a MMIO or PIO address space and will just do what
+ * you expect from them in the correct way.
+ *
+ * @maxlen specifies the maximum length to map. If you want to get access to
+ * the complete BAR from offset to the end, pass %0 here.
+ * */
+void __iomem *pci_iomap_range(pci_info_t *dev,
+			      int bar,
+			      unsigned long offset,
+			      unsigned long maxlen)
+{
+	resource_size_t start = pci_resource_start(dev, bar);
+	resource_size_t len = pci_resource_len(dev, bar);
+	unsigned long flags = pci_resource_flags(dev, bar);
+
+	if (len <= offset || !start)
+		return NULL;
+	len -= offset;
+	start += offset;
+	if (maxlen && len > maxlen)
+		len = maxlen;
+	//XXX: Do not support IOPORT_MAP
+	if (flags & IORESOURCE_IO)
+		return NULL;
+		//return __pci_ioport_map(dev, start, len);
+	if (flags & IORESOURCE_MEM)
+		return ioremap(start, len);
+	/* What? */
+	return NULL;
+}
+
+/*
+ * vp_modern_map_capability - map a part of virtio pci capability
+ * @mdev: the modern virtio-pci device
+ * @off: offset of the capability
+ * @minlen: minimal length of the capability
+ * @align: align requirement
+ * @start: start from the capability
+ * @size: map size
+ * @len: the length that is actually mapped
+ * @pa: physical address of the capability
+ *
+ * Returns the io address of for the part of the capability
+ */
+static void *
+vp_modern_map_capability(pci_info_t* dev, int off,
+			 size_t minlen, u32 align, u32 start, u32 size,
+			 size_t *len)
+{
+	u8 bar;
+	u32 offset, length;
+	void *p;
+
+	pci_read_config_byte(dev,
+			     off + offsetof(struct virtio_pci_cap, bar),
+			     &bar);
+	pci_read_config_dword(dev,
+			      off + offsetof(struct virtio_pci_cap, offset),
+			      &offset);
+	pci_read_config_dword(dev,
+			      off + offsetof(struct virtio_pci_cap, length),
+			      &length);
+
+	if (length <= start) {
+		dev_err("virtio_pci: bad capability len %u (>%u expected)\n",
+			length, start);
+		return NULL;
+	}
+
+	if (length - start < minlen) {
+		dev_err("virtio_pci: bad capability len %u (>=%zu expected)\n",
+			length, minlen);
+		return NULL;
+	}
+
+	length -= start;
+
+	if (start + offset < offset) {
+		dev_err("virtio_pci: map wrap-around %u+%u\n",
+			start, offset);
+		return NULL;
+	}
+
+	offset += start;
+
+	if (offset & (align - 1)) {
+		dev_err("virtio_pci: offset %u not aligned to %u\n",
+			offset, align);
+		return NULL;
+	}
+
+	if (length > size)
+		length = size;
+
+	if (len)
+		*len = length;
+
+	if (minlen + offset < minlen ||
+	    minlen + offset > pci_resource_len(dev, bar)) {
+		dev_err(&dev->dev,
+			"virtio_pci: map virtio %zu@%u "
+			"out of range on bar %i length %lu\n",
+			minlen, offset,
+			bar, (unsigned long)pci_resource_len(dev, bar));
+		return NULL;
+	}
+
+	p = pci_iomap_range(dev, bar, offset, length);
+	if (!p) {
+		dev_err(&dev->dev,
+			"virtio_pci: unable to map virtio %u@%u on bar %i\n",
+			length, offset, bar);
+		return NULL;
+	}
+
+	return p;
+}
+
+int
 virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 {
 	int common, modern_bars = 0;
+	struct virtio_pci_common_cfg *cfg;
 
 	common = virtio_pci_find_capability(pci_info, VIRTIO_PCI_CAP_COMMON_CFG,
 					    IORESOURCE_IO | IORESOURCE_MEM,
 					    &modern_bars);
+	if (!common)
+		return -ENODEV;
+
+	cfg = vp_modern_map_capability(pci_info, common,
+				       sizeof(struct virtio_pci_common_cfg), 4,
+				       0, sizeof(struct virtio_pci_common_cfg),
+				       NULL);
+	if (!cfg)
+		return -ENODEV;
+	
+	return 0;
 }
