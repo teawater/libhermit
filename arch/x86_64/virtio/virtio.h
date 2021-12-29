@@ -62,20 +62,26 @@ enum dma_data_direction {
 };
 
 struct virtqueue {
-	//struct list_head list;
 	void (*callback)(struct virtqueue *vq);
 	const char *name;
 	struct virtio_device *vdev;
         unsigned int index;
         unsigned int num_free;
-	//void *priv;
 };
 
 struct virtio_device {
-	uint32_t iobase;
 	uint64_t features;
-	//virt_queue_t vq;
 	void (*set_status)(struct virtio_device *vdev, uint8_t status);
+	union {
+		struct {
+			// For pci legacy
+			uint32_t iobase;
+		};
+		struct {
+			// For pci modern
+			struct virtio_pci_common_cfg *cfg;
+		};
+	};
 };
 
 struct scatterlist {
@@ -344,6 +350,6 @@ extern int virtio_device_find(pci_info_t *pci_info, bool *is_legacy, uint32_t ve
 extern void virtio_device_ready(struct virtio_device *vdev);
 
 extern int virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info);
-extern void virtio_pci_legacy_init(struct virtio_device *vdev);
+extern void virtio_pci_legacy_init(struct virtio_device *vdev, pci_info_t* pci_info);
 
 #endif

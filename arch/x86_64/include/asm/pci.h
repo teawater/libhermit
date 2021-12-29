@@ -55,12 +55,19 @@ struct resource {
 };
 
 typedef struct {
-	uint32_t base[6];
-	uint32_t size[6];
 	uint32_t irq;
-
 	uint32_t devfn, bus;
-	struct resource resource[6];
+	union {
+		struct {
+			// For pci legacy
+			uint32_t base[6];
+			uint32_t size[6];
+		};
+		struct {
+			// For pci modern
+			struct resource resource[6];
+		};
+	};
 } pci_info_t;
 
 #define PCI_IGNORE_SUBID	(0)
@@ -76,12 +83,15 @@ int pci_init(void);
  * @param subystem_id The subsystem ID (subsystem_device_id << 16 | subsystem_vendor_id)
  * @param info Pointer to the record pci_info_t where among other the IObase address will be stored
  * @param enable_bus_master If true, the bus mastering will be enabled.
+ * @param not_setup If true, not setup as pci legacy
  *
  * @return
  * - 0 on success
  * - -EINVAL (-22) on failure
  */
-int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsystem_id, pci_info_t* info, int8_t enble_bus_master);
+int pci_get_device_info(uint32_t vendor_id, uint32_t device_id,
+			uint32_t subsystem_id,pci_info_t* info,
+			int8_t enble_bus_master, bool not_setup);
 
 /** @brief Print information of existing pci adapters
  *
@@ -89,7 +99,8 @@ int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsyst
  */
 int print_pci_adapters(void);
 
-void pci_read_bases(pci_info_t* info);
+void pci_modern_init(pci_info_t* info);
+void pci_legacy_init(pci_info_t* info);
 
 #ifdef __cplusplus
 }

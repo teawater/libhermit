@@ -270,8 +270,9 @@ static u64 pci_size(u64 base, u64 maxbase, u64 mask)
  *
  * Returns 1 if the BAR is 64-bit, or 0 if 32-bit.
  */
-int __pci_read_base(pci_info_t* dev, enum pci_bar_type type,
-		    struct resource *res, unsigned int pos)
+static int
+__pci_read_base(pci_info_t* dev, enum pci_bar_type type,
+		struct resource *res, unsigned int pos)
 {
 	u32 l = 0, sz = 0, mask;
 	u64 l64, sz64, mask64;
@@ -420,7 +421,8 @@ out:
 	return (res->flags & IORESOURCE_MEM_64) ? 1 : 0;
 }
 
-void pci_read_bases(pci_info_t* info)
+// pci_read_bases
+void pci_modern_init(pci_info_t* info)
 {
 	unsigned int pos, reg;
 
@@ -431,9 +433,23 @@ void pci_read_bases(pci_info_t* info)
 	}
 }
 
-int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsystem_id, pci_info_t* info, int8_t bus_master)
+void pci_legacy_init(pci_info_t* info)
 {
-	uint32_t slot, bus, i;
+	int i;
+	uint32_t slot = info->devfn >> 3;
+
+	for(i=0; i<6; i++) {
+		info->base[i] = pci_what_iobase(info->bus, slot, i);
+		info->size[i] = (info->base[i]) ? pci_what_size(info->bus, slot, i) : 0;
+	}
+}
+
+int
+pci_get_device_info(uint32_t vendor_id, uint32_t device_id,
+		    uint32_t subsystem_id, pci_info_t* info,
+		    int8_t bus_master, bool not_setup)
+{
+	uint32_t slot, bus;
 
 	if (!info)
 		return -EINVAL;
@@ -452,15 +468,16 @@ int pci_get_device_info(uint32_t vendor_id, uint32_t device_id, uint32_t subsyst
 
 					if (subsystem_id != PCI_IGNORE_SUBID && pci_subid(bus, slot) != subsystem_id)
 						continue;
-					for(i=0; i<6; i++) {
-						info->base[i] = pci_what_iobase(bus, slot, i);
-						info->size[i] = (info->base[i]) ? pci_what_size(bus, slot, i) : 0;
-					}
+
+					info->devfn = slot << 3;
+					info->bus = bus;
+
+					if (not_setup)
+						pci_legacy_init(info);
+
 					info->irq = pci_what_irq(bus, slot);
 					if (bus_master)
 						pci_bus_master(bus, slot);
-					info->devfn = slot << 3;
-					info->bus = bus;
 
 					pci_read_config_byte(info, PCI_HEADER_TYPE, &hdr_type);
 					hdr_type = hdr_type & 0x7f;

@@ -310,7 +310,7 @@ err_t rtl8139if_init(struct netif* netif)
 
 	tmp8 = 0;
 	while (board_tbl[tmp8].vendor_str) {
-		if (pci_get_device_info(board_tbl[tmp8].vendor, board_tbl[tmp8].device, PCI_IGNORE_SUBID, &pci_info, 1) == 0)
+		if (pci_get_device_info(board_tbl[tmp8].vendor, board_tbl[tmp8].device, PCI_IGNORE_SUBID, &pci_info, 1, false) == 0)
 			break;
 		tmp8++;
 	}

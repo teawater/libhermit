@@ -102,9 +102,12 @@ virtio_device_setup(struct virtio_device *vdev, pci_info_t* pci_info, bool is_le
 	int ret = 0;
 
 	if (is_legacy)
-		virtio_pci_legacy_init(vdev);
-	else
-		virtio_pci_modern_init(vdev, pci_info);
+		virtio_pci_legacy_init(vdev, pci_info);
+	else {
+		ret = virtio_pci_modern_init(vdev, pci_info);
+		if (ret)
+			goto out;
+	}
 
 	virtio_device_init(vdev);
 
@@ -134,14 +137,15 @@ virtio_device_find(pci_info_t *pci_info, bool *is_legacy, uint32_t vendor_id, ui
 	for(i = 0; i < 0x1040; i++) {
 		if (pci_get_device_info(vendor_id, i,
 					 device_id << 16 | vendor_id,
-					 pci_info, 1) == 0) {
+					 pci_info, 1, true) == 0) {
 			*is_legacy = true;
+			pci_legacy_init(pci_info);
 			goto out;
 		}
 	}
-	if (i >= 0x1040 && pci_get_device_info(vendor_id, 0x1040 + device_id, PCI_IGNORE_SUBID, pci_info, 1) == 0) {
+	if (i >= 0x1040 && pci_get_device_info(vendor_id, 0x1040 + device_id, PCI_IGNORE_SUBID, pci_info, 1, true) == 0) {
 		*is_legacy = false;
-		pci_read_bases(pci_info);
+		pci_modern_init(pci_info);
 		goto out;
 	}
 

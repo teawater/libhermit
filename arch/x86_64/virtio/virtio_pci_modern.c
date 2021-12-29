@@ -218,7 +218,7 @@ static void *ioremap(resource_size_t start, resource_size_t len)
 	if (page_map(vaddr, page_start, len >> PAGE_BITS, PG_RW|PG_GLOBAL|PG_PCD|PG_NX) != 0)
 		return NULL;
 
-	return vaddr + start - page_start;
+	return (void *)(vaddr + start - page_start);
 }
 
 /**
@@ -352,20 +352,22 @@ int
 virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 {
 	int common, modern_bars = 0;
-	struct virtio_pci_common_cfg *cfg;
 
 	common = virtio_pci_find_capability(pci_info, VIRTIO_PCI_CAP_COMMON_CFG,
 					    IORESOURCE_IO | IORESOURCE_MEM,
 					    &modern_bars);
 	if (!common)
-		return -ENODEV;
+		return -ENXIO;
 
-	cfg = vp_modern_map_capability(pci_info, common,
-				       sizeof(struct virtio_pci_common_cfg), 4,
-				       0, sizeof(struct virtio_pci_common_cfg),
-				       NULL);
-	if (!cfg)
-		return -ENODEV;
+	vdev->cfg = vp_modern_map_capability(pci_info, common,
+					     sizeof(struct virtio_pci_common_cfg),
+					     4, 0,
+					     sizeof(struct virtio_pci_common_cfg),
+					     NULL);
+	if (!vdev->cfg)
+		return -ENXIO;
+	
+	
 	
 	return 0;
 }

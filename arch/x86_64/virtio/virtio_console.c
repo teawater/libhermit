@@ -92,8 +92,6 @@ virtio_console_init(void)
 	if (ret)
 		goto out;
 
-	virtio_console.iobase = pci_info.base[0];
-
 	ret = virtio_device_setup(&virtio_console, &pci_info, is_legacy);
 	if (ret)
 		goto out;
