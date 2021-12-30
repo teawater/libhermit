@@ -5,17 +5,6 @@
 #define PCI_STD_RESOURCES 0
 #define PCI_STD_RESOURCE_END 5
 
-#if 0
-
-
-
-static void vp_set_status(struct virtio_device *vdev, uint8_t status)
-{
-	outportb(status, vdev->iobase + VIRTIO_PCI_STATUS);
-}
-
-#endif
-
 #define PCI_STATUS		0x06	/* 16 bits */
 #define  PCI_STATUS_CAP_LIST	0x10	/* Support Capability List */
 #define PCI_CAPABILITY_LIST	0x34	/* Offset of first capability list entry */
@@ -348,16 +337,201 @@ vp_modern_map_capability(pci_info_t* dev, int off,
 	return p;
 }
 
+/* This is the PCI capability header: */
+struct virtio_pci_cap {
+	__u8 cap_vndr;		/* Generic PCI field: PCI_CAP_ID_VNDR */
+	__u8 cap_next;		/* Generic PCI field: next ptr. */
+	__u8 cap_len;		/* Generic PCI field: capability length */
+	__u8 cfg_type;		/* Identifies the structure. */
+	__u8 bar;		/* Where to find it. */
+	__u8 id;		/* Multiple capabilities of the same type */
+	__u8 padding[2];	/* Pad to full dword. */
+	__le32 offset;		/* Offset within bar. */
+	__le32 length;		/* Length of the structure, in bytes. */
+};
+
+struct virtio_pci_notify_cap {
+	struct virtio_pci_cap cap;
+	__le32 notify_off_multiplier;	/* Multiplier for queue_notify_off. */
+};
+
+static u16 vp_modern_get_queue_notify_off(struct virtio_device *vdev,
+					  u16 index)
+{
+	writew(index, &vdev->cfg->queue_select);
+
+	return readw(&vdev->cfg->queue_notify_off);
+}
+
+/* idea get from vp_modern_map_vq_notify */
+int
+virtio_pci_modern_setup_vq(struct virtqueue *vq)
+{
+	int ret = -EINVAL;
+	u16 off = vp_modern_get_queue_notify_off(vq->vdev, vq->index);
+
+	if (vq->vdev->notify_base) {
+		/* offset should not wrap */
+		if ((u64)off * vq->vdev->notify_offset_multiplier + 2
+			> vq->vdev->notify_len)
+			goto out;
+		vq->priv = vq->vdev->notify_base + off * vq->vdev->notify_offset_multiplier;
+	} else {
+		vq->priv = vp_modern_map_capability(vq->vdev,
+						    vq->vdev->notify_map_cap,
+						    2, 2,
+						    off * vq->vdev->notify_offset_multiplier,
+						    2, NULL);
+		if (!vq->priv)
+			goto out;
+	}
+
+	ret = 0;
+out:
+	return ret;
+}
+
+#define build_mmio_read(name, size, type, reg, barrier) \
+static inline type name(const volatile void __iomem *addr) \
+{ type ret; asm volatile("mov" size " %1,%0":reg (ret) \
+:"m" (*(volatile type *)addr) barrier); return ret; }
+
+#define build_mmio_write(name, size, type, reg, barrier) \
+static inline void name(type val, volatile void __iomem *addr) \
+{ asm volatile("mov" size " %0,%1": :reg (val), \
+"m" (*(volatile type *)addr) barrier); }
+
+build_mmio_read(readb, "b", unsigned char, "=q", :"memory")
+build_mmio_read(readw, "w", unsigned short, "=r", :"memory")
+build_mmio_read(readl, "l", unsigned int, "=r", :"memory")
+build_mmio_write(writeb, "b", unsigned char, "q", :"memory")
+build_mmio_write(writew, "w", unsigned short, "r", :"memory")
+build_mmio_write(writel, "l", unsigned int, "r", :"memory")
+
+static void vp_set_status(struct virtio_device *vdev, uint8_t status)
+{
+	writeb(status, &vdev->cfg->device_status);
+}
+
+static u8 vp_get_status(struct virtio_device *vdev)
+{
+	return readb(&vdev->cfg->device_status);
+}
+
+static u64 vp_get_features(struct virtio_device *vdev)
+{
+	u64 features;
+
+	writel(0, &vdev->cfg->device_feature_select);
+	features = readl(&vdev->cfg->device_feature);
+	writel(1, &vdev->cfg->device_feature_select);
+	features |= ((u64)readl(&vdev->cfg->device_feature) << 32);
+
+	return features;
+}
+
+static void
+vp_set_features(struct virtio_device *vdev)
+{
+	writel(0, &vdev->cfg->guest_feature_select);
+	writel((u32)vdev->features, &vdev->cfg->guest_feature);
+	writel(1, &vdev->cfg->guest_feature_select);
+	writel((u32)(vdev->features >> 32), &vdev->cfg->guest_feature);
+}
+
+static void vp_notify(struct virtqueue *vq)
+{
+	writew(vq->index, vq->priv);
+
+	return true;
+}
+
+#define CONFIG_X86_L1_CACHE_SHIFT 6
+#define L1_CACHE_SHIFT	(CONFIG_X86_L1_CACHE_SHIFT)
+#define L1_CACHE_BYTES	(1 << L1_CACHE_SHIFT)
+#define SMP_CACHE_BYTES L1_CACHE_BYTES
+
+static struct virtqueue *
+vp_setup_vq(struct virtio_device *vdev,
+	    int index, void (*callback)(struct virtqueue *vq),
+	    const char *name,
+	    bool ctx)
+{
+	struct virtqueue *vq;
+	u16 num;
+	int err;
+
+	if (index >= readw(&vdev->cfg->num_queues))
+		return ERR_PTR(-ENOENT);
+
+	/* Check if queue is either not available or already active. */
+	writew(index, &vdev->cfg->queue_select);
+	num = readw(&vdev->cfg->queue_size);
+	writew(index, &vdev->cfg->queue_select);
+	if (!num || readw(&vdev->cfg->queue_enable))
+		return ERR_PTR(-ENOENT);
+
+	if (num & (num - 1)) {
+		return ERR_PTR(-EINVAL);
+	}
+
+	/* create the vring */
+	vq = vring_create_virtqueue_split(index, num,
+					  SMP_CACHE_BYTES, vdev,
+					  true, true, ctx,
+					  vp_notify, callback, name);
+	if (!vq)
+		return ERR_PTR(-ENOMEM);
+
+	/* activate the queue */
+	vp_modern_set_queue_size(mdev, index, virtqueue_get_vring_size(vq));
+	vp_modern_queue_address(mdev, index, virtqueue_get_desc_addr(vq),
+				virtqueue_get_avail_addr(vq),
+				virtqueue_get_used_addr(vq));
+
+	vq->priv = (void __force *)vp_modern_map_vq_notify(mdev, index, NULL);
+	if (!vq->priv) {
+		err = -ENOMEM;
+		goto err_map_notify;
+	}
+
+	if (msix_vec != VIRTIO_MSI_NO_VECTOR) {
+		msix_vec = vp_modern_queue_vector(mdev, index, msix_vec);
+		if (msix_vec == VIRTIO_MSI_NO_VECTOR) {
+			err = -EBUSY;
+			goto err_assign_vector;
+		}
+	}
+
+	return vq;
+
+err_assign_vector:
+	if (!mdev->notify_base)
+		pci_iounmap(mdev->pci_dev, (void __iomem __force *)vq->priv);
+err_map_notify:
+	vring_del_virtqueue(vq);
+	return ERR_PTR(err);
+}
+
 int
 virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 {
-	int common, modern_bars = 0;
+	int ret = -ENXIO;
+	int common, notify, modern_bars = 0;
+	u32 notify_length;
+	u32 notify_offset;
 
 	common = virtio_pci_find_capability(pci_info, VIRTIO_PCI_CAP_COMMON_CFG,
 					    IORESOURCE_IO | IORESOURCE_MEM,
 					    &modern_bars);
 	if (!common)
-		return -ENXIO;
+		goto out;
+	
+	notify = virtio_pci_find_capability(pci_info, VIRTIO_PCI_CAP_NOTIFY_CFG,
+					    IORESOURCE_IO | IORESOURCE_MEM,
+					    &modern_bars);
+	if (!notify)
+		goto out;
 
 	vdev->cfg = vp_modern_map_capability(pci_info, common,
 					     sizeof(struct virtio_pci_common_cfg),
@@ -365,9 +539,46 @@ virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 					     sizeof(struct virtio_pci_common_cfg),
 					     NULL);
 	if (!vdev->cfg)
-		return -ENXIO;
-	
-	
-	
-	return 0;
+		goto out;
+
+	/* Read notify_off_multiplier from config space. */
+	pci_read_config_dword(pci_info,
+			      notify + offsetof(struct virtio_pci_notify_cap,
+						notify_off_multiplier),
+			      &vdev->notify_offset_multiplier);
+	/* Read notify length and offset from config space. */
+	pci_read_config_dword(pci_info,
+			      notify + offsetof(struct virtio_pci_notify_cap,
+						cap.length),
+			      &notify_length);
+
+	pci_read_config_dword(pci_info,
+			      notify + offsetof(struct virtio_pci_notify_cap,
+						cap.offset),
+			      &notify_offset);
+
+	/* We don't know how many VQs we'll map, ahead of the time.
+	 * If notify length is small, map it all now.
+	 * Otherwise, map each VQ individually later.
+	 */
+	if ((u64)notify_length + (notify_offset % PAGE_SIZE) <= PAGE_SIZE) {
+		vdev->notify_base = vp_modern_map_capability(pci_info, notify,
+							     2, 2,
+							     0, notify_length,
+							     &vdev->notify_len);
+		if (!vdev->notify_base)
+			goto out;
+	} else {
+		vdev->notify_map_cap = notify;
+	}
+
+	vdev->set_status = vp_set_status;
+	vdev->get_status = vp_get_status;
+	vdev->get_features = vp_get_features;
+	vdev->set_features = vp_set_features;
+	vdev->setup_vq = vp_setup_vq;
+
+	ret = 0;
+out:
+	return ret;
 }

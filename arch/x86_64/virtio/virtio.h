@@ -67,11 +67,12 @@ struct virtqueue {
 	struct virtio_device *vdev;
         unsigned int index;
         unsigned int num_free;
+	void *priv;
 };
 
 struct virtio_device {
 	uint64_t features;
-	void (*set_status)(struct virtio_device *vdev, uint8_t status);
+
 	union {
 		struct {
 			// For pci legacy
@@ -80,8 +81,23 @@ struct virtio_device {
 		struct {
 			// For pci modern
 			struct virtio_pci_common_cfg *cfg;
+			void *notify_base;
+			int notify_map_cap;
+			size_t notify_len;
+			u32 notify_offset_multiplier;
 		};
 	};
+
+	void (*set_status)(struct virtio_device *vdev, uint8_t status);
+	u8 (*get_status)(struct virtio_device *vdev);
+	u64 (*get_features)(struct virtio_device *vdev);
+	void (*set_features)(struct virtio_device *vdev);
+	void (*notify)(struct virtqueue *vq);
+	struct virtqueue *(*setup_vq)(struct virtio_device *vdev,
+					int index,
+					void (*callback)(struct virtqueue *vq),
+					const char *name,
+					bool ctx);
 };
 
 struct scatterlist {
