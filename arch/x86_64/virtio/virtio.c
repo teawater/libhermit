@@ -50,13 +50,14 @@ virtio_device_init(struct virtio_device *vdev)
 }
 
 struct virtqueue *
-virtio_setup_vq(struct virtio_device *vdev,
+virtio_setup_vq(pci_info_t* pci_info,
+		struct virtio_device *vdev,
 		int index,
 		void (*callback)(struct virtqueue *vq),
 		const char *name,
 		bool ctx)
 {
-	return vdev->setup_vq(vdev, index, callback, name, ctx);
+	return vdev->setup_vq(pci_info, vdev, index, callback, name, ctx);
 }
 
 int

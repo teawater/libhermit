@@ -65,6 +65,29 @@ struct virtio_pci_common_cfg {
 	__le32 queue_used_hi;		/* read-write */
 };
 
+#define build_mmio_read(name, size, type, reg, barrier) \
+static inline type name(const volatile void __iomem *addr) \
+{ type ret; asm volatile("mov" size " %1,%0":reg (ret) \
+:"m" (*(volatile type *)addr) barrier); return ret; }
+
+#define build_mmio_write(name, size, type, reg, barrier) \
+static inline void name(type val, volatile void __iomem *addr) \
+{ asm volatile("mov" size " %0,%1": :reg (val), \
+"m" (*(volatile type *)addr) barrier); }
+
+build_mmio_read(readb, "b", unsigned char, "=q", :"memory")
+build_mmio_read(readw, "w", unsigned short, "=r", :"memory")
+build_mmio_read(readl, "l", unsigned int, "=r", :"memory")
+build_mmio_write(writeb, "b", unsigned char, "q", :"memory")
+build_mmio_write(writew, "w", unsigned short, "r", :"memory")
+build_mmio_write(writel, "l", unsigned int, "r", :"memory")
+static void vp_iowrite64_twopart(u64 val, __le32 __iomem *lo,
+				 __le32 __iomem *hi)
+{
+	writel((u32)val, lo);
+	writel(val >> 32, hi);
+}	
+
 static u8 __pci_find_next_cap_ttl(uint32_t bus, unsigned int devfn,
 				  u8 pos, int cap, int *ttl)
 {
@@ -337,19 +360,6 @@ vp_modern_map_capability(pci_info_t* dev, int off,
 	return p;
 }
 
-/* This is the PCI capability header: */
-struct virtio_pci_cap {
-	__u8 cap_vndr;		/* Generic PCI field: PCI_CAP_ID_VNDR */
-	__u8 cap_next;		/* Generic PCI field: next ptr. */
-	__u8 cap_len;		/* Generic PCI field: capability length */
-	__u8 cfg_type;		/* Identifies the structure. */
-	__u8 bar;		/* Where to find it. */
-	__u8 id;		/* Multiple capabilities of the same type */
-	__u8 padding[2];	/* Pad to full dword. */
-	__le32 offset;		/* Offset within bar. */
-	__le32 length;		/* Length of the structure, in bytes. */
-};
-
 struct virtio_pci_notify_cap {
 	struct virtio_pci_cap cap;
 	__le32 notify_off_multiplier;	/* Multiplier for queue_notify_off. */
@@ -363,9 +373,8 @@ static u16 vp_modern_get_queue_notify_off(struct virtio_device *vdev,
 	return readw(&vdev->cfg->queue_notify_off);
 }
 
-/* idea get from vp_modern_map_vq_notify */
-int
-virtio_pci_modern_setup_vq(struct virtqueue *vq)
+static int
+vp_modern_map_vq_notify(pci_info_t* pci_info, struct virtqueue *vq)
 {
 	int ret = -EINVAL;
 	u16 off = vp_modern_get_queue_notify_off(vq->vdev, vq->index);
@@ -377,7 +386,7 @@ virtio_pci_modern_setup_vq(struct virtqueue *vq)
 			goto out;
 		vq->priv = vq->vdev->notify_base + off * vq->vdev->notify_offset_multiplier;
 	} else {
-		vq->priv = vp_modern_map_capability(vq->vdev,
+		vq->priv = vp_modern_map_capability(pci_info,
 						    vq->vdev->notify_map_cap,
 						    2, 2,
 						    off * vq->vdev->notify_offset_multiplier,
@@ -390,23 +399,6 @@ virtio_pci_modern_setup_vq(struct virtqueue *vq)
 out:
 	return ret;
 }
-
-#define build_mmio_read(name, size, type, reg, barrier) \
-static inline type name(const volatile void __iomem *addr) \
-{ type ret; asm volatile("mov" size " %1,%0":reg (ret) \
-:"m" (*(volatile type *)addr) barrier); return ret; }
-
-#define build_mmio_write(name, size, type, reg, barrier) \
-static inline void name(type val, volatile void __iomem *addr) \
-{ asm volatile("mov" size " %0,%1": :reg (val), \
-"m" (*(volatile type *)addr) barrier); }
-
-build_mmio_read(readb, "b", unsigned char, "=q", :"memory")
-build_mmio_read(readw, "w", unsigned short, "=r", :"memory")
-build_mmio_read(readl, "l", unsigned int, "=r", :"memory")
-build_mmio_write(writeb, "b", unsigned char, "q", :"memory")
-build_mmio_write(writew, "w", unsigned short, "r", :"memory")
-build_mmio_write(writel, "l", unsigned int, "r", :"memory")
 
 static void vp_set_status(struct virtio_device *vdev, uint8_t status)
 {
@@ -439,7 +431,7 @@ vp_set_features(struct virtio_device *vdev)
 	writel((u32)(vdev->features >> 32), &vdev->cfg->guest_feature);
 }
 
-static void vp_notify(struct virtqueue *vq)
+static bool vp_notify(struct virtqueue *vq)
 {
 	writew(vq->index, vq->priv);
 
@@ -452,27 +444,29 @@ static void vp_notify(struct virtqueue *vq)
 #define SMP_CACHE_BYTES L1_CACHE_BYTES
 
 static struct virtqueue *
-vp_setup_vq(struct virtio_device *vdev,
+vp_setup_vq(pci_info_t* pci_info,
+	    struct virtio_device *vdev,
 	    int index, void (*callback)(struct virtqueue *vq),
 	    const char *name,
 	    bool ctx)
 {
 	struct virtqueue *vq;
 	u16 num;
-	int err;
+	int err = -ENOENT;
 
 	if (index >= readw(&vdev->cfg->num_queues))
-		return ERR_PTR(-ENOENT);
+		goto err;
 
 	/* Check if queue is either not available or already active. */
 	writew(index, &vdev->cfg->queue_select);
 	num = readw(&vdev->cfg->queue_size);
 	writew(index, &vdev->cfg->queue_select);
 	if (!num || readw(&vdev->cfg->queue_enable))
-		return ERR_PTR(-ENOENT);
+		goto err;
 
 	if (num & (num - 1)) {
-		return ERR_PTR(-EINVAL);
+		err = -EINVAL;
+		goto err;
 	}
 
 	/* create the vring */
@@ -480,36 +474,28 @@ vp_setup_vq(struct virtio_device *vdev,
 					  SMP_CACHE_BYTES, vdev,
 					  true, true, ctx,
 					  vp_notify, callback, name);
-	if (!vq)
-		return ERR_PTR(-ENOMEM);
+	if (!vq) {
+		err = -ENOMEM;
+		goto err;
+	}
 
 	/* activate the queue */
-	vp_modern_set_queue_size(mdev, index, virtqueue_get_vring_size(vq));
-	vp_modern_queue_address(mdev, index, virtqueue_get_desc_addr(vq),
-				virtqueue_get_avail_addr(vq),
-				virtqueue_get_used_addr(vq));
+	writew(index, &vdev->cfg->queue_select);
+	writew(virtqueue_get_vring_size(vq), &vdev->cfg->queue_size);
+	writew(index, &vdev->cfg->queue_select);
+	vp_iowrite64_twopart(virtqueue_get_desc_addr(vq), &vdev->cfg->queue_desc_lo,
+			     &vdev->cfg->queue_desc_hi);
+	vp_iowrite64_twopart(virtqueue_get_avail_addr(vq), &vdev->cfg->queue_avail_lo,
+			     &vdev->cfg->queue_avail_hi);
+	vp_iowrite64_twopart(virtqueue_get_used_addr(vq), &vdev->cfg->queue_used_lo,
+			     &vdev->cfg->queue_used_hi);
 
-	vq->priv = (void __force *)vp_modern_map_vq_notify(mdev, index, NULL);
-	if (!vq->priv) {
-		err = -ENOMEM;
-		goto err_map_notify;
-	}
-
-	if (msix_vec != VIRTIO_MSI_NO_VECTOR) {
-		msix_vec = vp_modern_queue_vector(mdev, index, msix_vec);
-		if (msix_vec == VIRTIO_MSI_NO_VECTOR) {
-			err = -EBUSY;
-			goto err_assign_vector;
-		}
-	}
+	err = vp_modern_map_vq_notify(pci_info, vq);
+	if (err)
+		goto err;
 
 	return vq;
-
-err_assign_vector:
-	if (!mdev->notify_base)
-		pci_iounmap(mdev->pci_dev, (void __iomem __force *)vq->priv);
-err_map_notify:
-	vring_del_virtqueue(vq);
+err:
 	return ERR_PTR(err);
 }
 

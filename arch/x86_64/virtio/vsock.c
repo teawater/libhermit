@@ -129,22 +129,23 @@ virtio_vsock_init(void)
 	if (ret)
 		goto out;
 
-	rx_vq = virtio_setup_vq(&virtio_vsock, VSOCK_VQ_RX, rx_vq_callback,
-				"vsock_rx_vq", false);
+	rx_vq = virtio_setup_vq(&pci_info, &virtio_vsock, VSOCK_VQ_RX,
+				rx_vq_callback, "vsock_rx_vq", false);
 	if (IS_ERR(rx_vq)) {
 		ret = PTR_ERR(rx_vq);
 		goto out;
 	}
 
-	tx_vq = virtio_setup_vq(&virtio_vsock, VSOCK_VQ_TX, tx_vq_callback,
-				"vsock_tx_vq", false);
+	tx_vq = virtio_setup_vq(&pci_info, &virtio_vsock, VSOCK_VQ_TX,
+				tx_vq_callback, "vsock_tx_vq", false);
 	if (IS_ERR(tx_vq)) {
 		ret = PTR_ERR(tx_vq);
 		goto out;
 	}
 
-	event_vq = virtio_setup_vq(&virtio_vsock, VSOCK_VQ_EVENT, event_vq_callback,
-				"vsock_event_vq", false);
+	event_vq = virtio_setup_vq(&pci_info, &virtio_vsock, VSOCK_VQ_EVENT,
+				   event_vq_callback,
+				   "vsock_event_vq", false);
 	if (IS_ERR(event_vq)) {
 		ret = PTR_ERR(event_vq);
 		goto out;

@@ -92,8 +92,8 @@ struct virtio_device {
 	u8 (*get_status)(struct virtio_device *vdev);
 	u64 (*get_features)(struct virtio_device *vdev);
 	void (*set_features)(struct virtio_device *vdev);
-	void (*notify)(struct virtqueue *vq);
-	struct virtqueue *(*setup_vq)(struct virtio_device *vdev,
+	struct virtqueue *(*setup_vq)(pci_info_t* pci_info,
+					struct virtio_device *vdev,
 					int index,
 					void (*callback)(struct virtqueue *vq),
 					const char *name,
@@ -107,7 +107,8 @@ struct scatterlist {
 };
 
 extern int virtio_device_setup(struct virtio_device *vdev, pci_info_t* info, bool is_legacy);
-extern struct virtqueue *virtio_setup_vq(struct virtio_device *vdev,
+extern struct virtqueue *virtio_setup_vq(pci_info_t* pci_info,
+					 struct virtio_device *vdev,
 					 int index,
 					 void (*callback)(struct virtqueue *vq),
 					 const char *name,
@@ -359,6 +360,9 @@ extern int virtqueue_add_outbuf(struct virtqueue *vq,
 extern bool virtqueue_kick(struct virtqueue *vq);
 extern void *virtqueue_get_buf(struct virtqueue *vq, unsigned int *len);
 extern bool virtqueue_is_broken(struct virtqueue *vq);
+unsigned int virtqueue_get_vring_size(struct virtqueue *_vq);
+dma_addr_t virtqueue_get_avail_addr(struct virtqueue *_vq);
+dma_addr_t virtqueue_get_used_addr(struct virtqueue *_vq);
 
 extern int virtio_device_find(pci_info_t *pci_info, bool *is_legacy, uint32_t vendor_id,
 			      uint32_t device_id);

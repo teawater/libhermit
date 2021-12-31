@@ -33,7 +33,8 @@ static bool vp_notify(struct virtqueue *vq)
 }
 
 static struct virtqueue *
-vp_setup_vq(struct virtio_device *vdev,
+vp_setup_vq(pci_info_t* pci_info,
+	    struct virtio_device *vdev,
 	    int index, void (*callback)(struct virtqueue *vq),
 	    const char *name,
 	    bool ctx)
