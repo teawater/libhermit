@@ -55,8 +55,8 @@ struct resource {
 };
 
 typedef struct {
-	uint32_t irq;
 	uint32_t devfn, bus;
+	uint8_t irq;
 	union {
 		struct {
 			// For pci legacy

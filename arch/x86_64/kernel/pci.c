@@ -143,12 +143,18 @@ static uint32_t pci_conf_read(uint32_t bus, uint32_t slot, uint32_t off)
 
 static inline uint32_t pci_subid(uint32_t bus, uint32_t slot)
 {
-	return pci_conf_read(bus, slot, PCI_SUBSYSTEM_VENDOR_ID);
+	uint32_t id;
+
+	pci_bus_read_config_dword(bus, slot << 3, PCI_SUBSYSTEM_VENDOR_ID, &id);
+	return id;
 }
 
-static inline uint32_t pci_what_irq(uint32_t bus, uint32_t slot)
+static inline uint8_t pci_what_irq(pci_info_t *info)
 {
-	return pci_conf_read(bus, slot, PCI_INTERRUPT_LINE) & 0xFF;
+	uint8_t irq;
+
+	pci_read_config_byte(info, PCI_INTERRUPT_LINE, &irq);
+	return irq;
 }
 
 static inline uint32_t pci_what_iobase(uint32_t bus, uint32_t slot, uint32_t nr)
@@ -279,17 +285,14 @@ __pci_read_base(pci_info_t* dev, enum pci_bar_type type,
 	u64 l64, sz64, mask64;
 	u16 orig_cmd;
 	//struct pci_bus_region region, inverted_region;
-	bool mmio_always_on = false;
 
 	mask = type ? PCI_ROM_ADDRESS_MASK : ~0;
 
 	/* No printks while decoding is disabled! */
-	if (!mmio_always_on) {
-		pci_read_config_word(dev, PCI_COMMAND, &orig_cmd);
-		if (orig_cmd & PCI_COMMAND_DECODE_ENABLE) {
-			pci_write_config_word(dev, PCI_COMMAND,
-				orig_cmd & ~PCI_COMMAND_DECODE_ENABLE);
-		}
+	pci_read_config_word(dev, PCI_COMMAND, &orig_cmd);
+	if (orig_cmd & PCI_COMMAND_DECODE_ENABLE) {
+		pci_write_config_word(dev, PCI_COMMAND,
+				      orig_cmd & ~PCI_COMMAND_DECODE_ENABLE);
 	}
 
 	pci_read_config_dword(dev, pos, &l);
@@ -344,7 +347,7 @@ __pci_read_base(pci_info_t* dev, enum pci_bar_type type,
 		mask64 |= ((u64)~0 << 32);
 	}
 
-	if (mmio_always_on && (orig_cmd & PCI_COMMAND_DECODE_ENABLE))
+	if (orig_cmd & PCI_COMMAND_DECODE_ENABLE)
 		pci_write_config_word(dev, PCI_COMMAND, orig_cmd);
 
 	if (!sz64)
@@ -476,7 +479,7 @@ pci_get_device_info(uint32_t vendor_id, uint32_t device_id,
 					if (!not_setup)
 						pci_legacy_init(info);
 
-					info->irq = pci_what_irq(bus, slot);
+					info->irq = pci_what_irq(info);
 					if (bus_master)
 						pci_bus_master(info);
 
