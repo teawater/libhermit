@@ -40,7 +40,7 @@
 /*
  * PCI configuration registers
  */
-#define	PCI_CFID	0x00	/* Configuration ID */
+#define PCI_VENDOR_ID		0x00	/* 16 bits */
 #define	PCI_CFCS	0x04	/* Configurtion Command/Status */
 #define	PCI_CFRV	0x08	/* Configuration Revision */
 #define	PCI_CFLT	0x0c	/* Configuration Latency Timer */
@@ -64,6 +64,44 @@
 
 #define MAX_BUS			1
 #define MAX_SLOTS		32
+
+#define PCI_COMMAND		0x04	/* 16 bits */
+#define PCI_COMMAND_IO		0x1	/* Enable response in I/O space */
+#define PCI_COMMAND_MEMORY	0x2	/* Enable response in Memory space */
+#define  PCI_COMMAND_MASTER	0x4	/* Enable bus mastering */
+#define PCI_COMMAND_DECODE_ENABLE	(PCI_COMMAND_MEMORY | PCI_COMMAND_IO)
+/*
+ * Base addresses specify locations in memory or I/O space.
+ * Decoded size can be determined by writing a value of
+ * 0xffffffff to the register, and reading it back.  Only
+ * 1 bits are decoded.
+ */
+#define PCI_BASE_ADDRESS_0	0x10	/* 32 bits */
+#define PCI_BASE_ADDRESS_1	0x14	/* 32 bits [htype 0,1 only] */
+#define PCI_BASE_ADDRESS_2	0x18	/* 32 bits [htype 0 only] */
+#define PCI_BASE_ADDRESS_3	0x1c	/* 32 bits */
+#define PCI_BASE_ADDRESS_4	0x20	/* 32 bits */
+#define PCI_BASE_ADDRESS_5	0x24	/* 32 bits */
+#define  PCI_BASE_ADDRESS_SPACE		0x01	/* 0 = memory, 1 = I/O */
+#define  PCI_BASE_ADDRESS_SPACE_IO	0x01
+#define  PCI_BASE_ADDRESS_SPACE_MEMORY	0x00
+#define  PCI_BASE_ADDRESS_MEM_TYPE_MASK	0x06
+#define  PCI_BASE_ADDRESS_MEM_TYPE_32	0x00	/* 32 bit address */
+#define  PCI_BASE_ADDRESS_MEM_TYPE_1M	0x02	/* Below 1M [obsolete] */
+#define  PCI_BASE_ADDRESS_MEM_TYPE_64	0x04	/* 64 bit address */
+#define  PCI_BASE_ADDRESS_MEM_PREFETCH	0x08	/* prefetchable? */
+#define  PCI_BASE_ADDRESS_MEM_MASK	(~0x0fUL)
+#define  PCI_BASE_ADDRESS_IO_MASK	(~0x03UL)
+/* bit 1 is reserved if address_space = 1 */
+
+/* Header type 0 (normal devices) */
+#define PCI_CARDBUS_CIS		0x28
+#define PCI_SUBSYSTEM_ID	0x2e
+#define PCI_ROM_ADDRESS		0x30	/* Bits 31..11 are address, 10..1 reserved */
+#define PCI_ROM_ADDRESS_ENABLE	0x01
+#define PCI_ROM_ADDRESS_MASK	(~0x7ffU)
+
+#define IO_SPACE_LIMIT 0xffffffff
 
 static uint32_t mechanism = 0;
 static uint32_t adapters[MAX_BUS][MAX_SLOTS] = {[0 ... MAX_BUS-1][0 ... MAX_SLOTS-1] = -1};
@@ -118,12 +156,12 @@ static inline uint32_t pci_what_iobase(uint32_t bus, uint32_t slot, uint32_t nr)
 	return pci_conf_read(bus, slot, PCI_CBIO + nr*4) & 0xFFFFFFFC;
 }
 
-static inline void pci_bus_master(uint32_t bus, uint32_t slot)
+static inline void pci_bus_master(pci_info_t *info)
 {
-	// set the device to a bus master
+	u16 cmd;
 
-	uint32_t cmd = pci_conf_read(bus, slot, PCI_CFCS) | 0x4;
-	pci_conf_write(bus, slot, PCI_CFCS, cmd);
+	pci_read_config_word(info, PCI_COMMAND, &cmd);
+	pci_write_config_word(info, PCI_COMMAND, cmd | PCI_COMMAND_MASTER);
 }
 
 static inline uint32_t pci_what_size(uint32_t bus, uint32_t slot, uint32_t nr)
@@ -149,47 +187,10 @@ int pci_init(void)
 
 	for (bus = 0; bus < MAX_BUS; bus++)
 		for (slot = 0; slot < MAX_SLOTS; slot++)
-			adapters[bus][slot] = pci_conf_read(bus, slot, PCI_CFID);
+			pci_bus_read_config_dword(bus, slot << 3, PCI_VENDOR_ID, &(adapters[bus][slot]));
 
 	return 0;
 }
-
-#define PCI_COMMAND		0x04	/* 16 bits */
-#define PCI_COMMAND_IO		0x1	/* Enable response in I/O space */
-#define PCI_COMMAND_MEMORY	0x2	/* Enable response in Memory space */
-#define PCI_COMMAND_DECODE_ENABLE	(PCI_COMMAND_MEMORY | PCI_COMMAND_IO)
-/*
- * Base addresses specify locations in memory or I/O space.
- * Decoded size can be determined by writing a value of
- * 0xffffffff to the register, and reading it back.  Only
- * 1 bits are decoded.
- */
-#define PCI_BASE_ADDRESS_0	0x10	/* 32 bits */
-#define PCI_BASE_ADDRESS_1	0x14	/* 32 bits [htype 0,1 only] */
-#define PCI_BASE_ADDRESS_2	0x18	/* 32 bits [htype 0 only] */
-#define PCI_BASE_ADDRESS_3	0x1c	/* 32 bits */
-#define PCI_BASE_ADDRESS_4	0x20	/* 32 bits */
-#define PCI_BASE_ADDRESS_5	0x24	/* 32 bits */
-#define  PCI_BASE_ADDRESS_SPACE		0x01	/* 0 = memory, 1 = I/O */
-#define  PCI_BASE_ADDRESS_SPACE_IO	0x01
-#define  PCI_BASE_ADDRESS_SPACE_MEMORY	0x00
-#define  PCI_BASE_ADDRESS_MEM_TYPE_MASK	0x06
-#define  PCI_BASE_ADDRESS_MEM_TYPE_32	0x00	/* 32 bit address */
-#define  PCI_BASE_ADDRESS_MEM_TYPE_1M	0x02	/* Below 1M [obsolete] */
-#define  PCI_BASE_ADDRESS_MEM_TYPE_64	0x04	/* 64 bit address */
-#define  PCI_BASE_ADDRESS_MEM_PREFETCH	0x08	/* prefetchable? */
-#define  PCI_BASE_ADDRESS_MEM_MASK	(~0x0fUL)
-#define  PCI_BASE_ADDRESS_IO_MASK	(~0x03UL)
-/* bit 1 is reserved if address_space = 1 */
-
-/* Header type 0 (normal devices) */
-#define PCI_CARDBUS_CIS		0x28
-#define PCI_SUBSYSTEM_ID	0x2e
-#define PCI_ROM_ADDRESS		0x30	/* Bits 31..11 are address, 10..1 reserved */
-#define PCI_ROM_ADDRESS_ENABLE	0x01
-#define PCI_ROM_ADDRESS_MASK	(~0x7ffU)
-
-#define IO_SPACE_LIMIT 0xffffffff
 
 #define pci_info(...)
 #define pci_err(...)
@@ -472,12 +473,12 @@ pci_get_device_info(uint32_t vendor_id, uint32_t device_id,
 					info->devfn = slot << 3;
 					info->bus = bus;
 
-					if (not_setup)
+					if (!not_setup)
 						pci_legacy_init(info);
 
 					info->irq = pci_what_irq(bus, slot);
 					if (bus_master)
-						pci_bus_master(bus, slot);
+						pci_bus_master(info);
 
 					pci_read_config_byte(info, PCI_HEADER_TYPE, &hdr_type);
 					hdr_type = hdr_type & 0x7f;
