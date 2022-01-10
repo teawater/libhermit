@@ -438,6 +438,35 @@ static bool vp_notify(struct virtqueue *vq)
 	return true;
 }
 
+static void vp_get(struct virtio_device *vdev, unsigned offset,
+		   u8 *buf, unsigned len)
+{
+	switch (len) {
+	case 1: {
+		u8 b = readb(vdev->device + offset);
+		memcpy(buf, &b, sizeof b);
+	}
+		break;
+	case 2: {
+		u16 w = readw(vdev->device + offset);
+		memcpy(buf, &w, sizeof w);
+	}
+		break;
+	case 4: {
+		u32 l = readl(vdev->device + offset);
+		memcpy(buf, &l, sizeof l);
+	}
+		break;
+	case 8: {
+		u32 l = readl(vdev->device + offset);
+		memcpy(buf, &l, sizeof l);
+		l = readl(vdev->device + offset + sizeof l);
+		memcpy(buf + sizeof l, &l, sizeof l);
+	}
+		break;
+	}
+}
+
 #define CONFIG_X86_L1_CACHE_SHIFT 6
 #define L1_CACHE_SHIFT	(CONFIG_X86_L1_CACHE_SHIFT)
 #define L1_CACHE_BYTES	(1 << L1_CACHE_SHIFT)
@@ -489,6 +518,8 @@ vp_setup_vq(pci_info_t* pci_info,
 			     &vdev->cfg->queue_avail_hi);
 	vp_iowrite64_twopart(virtqueue_get_used_addr(vq), &vdev->cfg->queue_used_lo,
 			     &vdev->cfg->queue_used_hi);
+	writew(index, &vdev->cfg->queue_select);
+	writew(1, &vdev->cfg->queue_enable);
 
 	err = vp_modern_map_vq_notify(pci_info, vq);
 	if (err)
@@ -503,7 +534,7 @@ int
 virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 {
 	int ret = -ENXIO;
-	int common, notify, modern_bars = 0;
+	int common, notify, device, modern_bars = 0;
 	u32 notify_length;
 	u32 notify_offset;
 
@@ -519,12 +550,24 @@ virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 	if (!notify)
 		goto out;
 
+	device = virtio_pci_find_capability(pci_info, VIRTIO_PCI_CAP_DEVICE_CFG,
+					    IORESOURCE_IO | IORESOURCE_MEM,
+					    &modern_bars);
+	if (!device)
+		goto out;
+
 	vdev->cfg = vp_modern_map_capability(pci_info, common,
 					     sizeof(struct virtio_pci_common_cfg),
 					     4, 0,
 					     sizeof(struct virtio_pci_common_cfg),
 					     NULL);
 	if (!vdev->cfg)
+		goto out;
+
+	vdev->device = vp_modern_map_capability(pci_info, device,
+						0, 4, 0, PAGE_SIZE,
+						&vdev->device_len);
+	if (!vdev->device)
 		goto out;
 
 	/* Read notify_off_multiplier from config space. */
@@ -562,6 +605,7 @@ virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 	vdev->get_status = vp_get_status;
 	vdev->get_features = vp_get_features;
 	vdev->set_features = vp_set_features;
+	vdev->get = vp_get;
 	vdev->setup_vq = vp_setup_vq;
 
 	ret = 0;

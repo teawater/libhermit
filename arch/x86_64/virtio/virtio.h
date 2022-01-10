@@ -81,6 +81,8 @@ struct virtio_device {
 		struct {
 			// For pci modern
 			struct virtio_pci_common_cfg *cfg;
+			void *device;
+			size_t device_len;
 			void *notify_base;
 			int notify_map_cap;
 			size_t notify_len;
@@ -92,6 +94,8 @@ struct virtio_device {
 	u8 (*get_status)(struct virtio_device *vdev);
 	u64 (*get_features)(struct virtio_device *vdev);
 	void (*set_features)(struct virtio_device *vdev);
+	void (*get)(struct virtio_device *vdev, unsigned offset, u8 *buf,
+		    unsigned len);
 	struct virtqueue *(*setup_vq)(pci_info_t* pci_info,
 					struct virtio_device *vdev,
 					int index,

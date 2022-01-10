@@ -32,6 +32,16 @@ static bool vp_notify(struct virtqueue *vq)
 	return true;
 }
 
+static void vp_get(struct virtio_device *vdev, unsigned offset,
+		   u8 *buf, unsigned len)
+{
+	uint32_t ioaddr = vdev->iobase + VIRTIO_PCI_CONFIG_OFF(0) + offset;
+	int i;
+
+	for (i = 0; i < len; i++)
+		buf[i] = inportb(ioaddr + i);
+}
+
 static struct virtqueue *
 vp_setup_vq(pci_info_t* pci_info,
 	    struct virtio_device *vdev,
@@ -76,5 +86,6 @@ virtio_pci_legacy_init(struct virtio_device *vdev, pci_info_t* pci_info)
 	vdev->get_status = vp_get_status;
 	vdev->get_features = vp_get_features;
 	vdev->set_features = vp_set_features;
+	vdev->get = vp_get;
 	vdev->setup_vq = vp_setup_vq;
 }

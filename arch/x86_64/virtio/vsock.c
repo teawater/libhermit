@@ -36,12 +36,7 @@ struct virtio_vsock_pkt {
 
 static void get_cid(void)
 {
-	uint32_t ioaddr = virtio_vsock.iobase + VIRTIO_PCI_CONFIG_OFF(0);
-	uint8_t *ptr = (uint8_t *)&cid;
-	int i;
-
-	for (i = 0; i < 8; i++)
-		ptr[i] = inportb(ioaddr + i);
+	virtio_vsock.get(&virtio_vsock, 0, (char *)&cid, sizeof(cid));
 
 	LOG_INFO("vsock cid is %ld\n", cid);
 }
@@ -67,7 +62,7 @@ static void virtio_vsock_handler(struct state *s)
 
 	/* reading the ISR has the effect of also clearing it so it's very
 	 * important to save off the value. */
-	isr = inportb(virtio_vsock.iobase + VIRTIO_PCI_ISR);
+	//isr = inportb(virtio_vsock.iobase + VIRTIO_PCI_ISR);
 
 	/* It's definitely not us if the ISR was not high */
 	if (!isr)
