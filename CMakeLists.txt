@@ -239,7 +239,7 @@ set(CPACK_PACKAGE_RELOCATABLE FALSE)
 
 include(CPack)
 
-file(GLOB KATA_SOURCES	"kata/*.c")
+file(GLOB KATA_SOURCES	"kata_source/*.c")
 add_executable(kata ${KATA_SOURCES})
 target_compile_options(kata PRIVATE -g)
 target_link_libraries (kata $<TARGET_FILE:hermit-bootstrap>)
