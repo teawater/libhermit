@@ -329,7 +329,7 @@ err_t vioif_init(struct netif* netif)
 	LWIP_ASSERT("netif != NULL", (netif != NULL));
 
 	for(i=0x100; i<=0x103F; i++) {
-		if ((pci_get_device_info(VENDOR_ID, i, 1, &pci_info, 1) == 0)) {
+		if ((pci_get_device_info(VENDOR_ID, i, 1, &pci_info, 1, false) == 0)) {
 			LOG_INFO("Found vioif (Vendor ID 0x%x, Device Id 0x%x)\n", VENDOR_ID, i);
 			break;
 		}

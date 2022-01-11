@@ -429,7 +429,7 @@ int virtqueue_add_split(struct virtqueue *_vq,
 	struct vring_virtqueue *vq = to_vvq(_vq);
 	struct scatterlist *sg;
 	struct vring_desc *desc;
-	unsigned int i, n, avail, descs_used, prev, err_idx;
+	unsigned int i, n, avail, descs_used, prev = 0, err_idx;
 	int head;
 	bool indirect;
 
@@ -791,4 +791,37 @@ bool virtqueue_is_broken(struct virtqueue *_vq)
 	struct vring_virtqueue *vq = to_vvq(_vq);
 
 	return READ_ONCE(vq->broken);
+}
+
+unsigned int virtqueue_get_vring_size(struct virtqueue *_vq)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	return vq->split.vring.num;
+}
+
+dma_addr_t virtqueue_get_avail_addr(struct virtqueue *_vq)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	//BUG_ON(!vq->we_own_ring);
+
+	//if (vq->packed_ring)
+	//	return vq->packed.driver_event_dma_addr;
+
+	return vq->split.queue_dma_addr +
+		((char *)vq->split.vring.avail - (char *)vq->split.vring.desc);
+}
+
+dma_addr_t virtqueue_get_used_addr(struct virtqueue *_vq)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	//BUG_ON(!vq->we_own_ring);
+
+	//if (vq->packed_ring)
+	//	return vq->packed.device_event_dma_addr;
+
+	return vq->split.queue_dma_addr +
+		((char *)vq->split.vring.used - (char *)vq->split.vring.desc);
 }

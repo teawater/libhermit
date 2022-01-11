@@ -222,10 +222,14 @@ void print_cpu_status(int isle);
 #ifndef false
 #define false 0
 #endif
+#define u8 uint8_t
 #define u16 uint16_t
 #define u32 uint32_t
 #define u64 uint64_t
 #define dma_addr_t uint64_t
+typedef u64 resource_size_t;
+typedef u64 pci_bus_addr_t;
+#define __iomem
 
 /**
  * enum irqreturn
