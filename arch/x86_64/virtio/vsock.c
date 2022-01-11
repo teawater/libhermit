@@ -3,10 +3,6 @@
 #define VENDOR_ID		0x1AF4
 #define VIRTIO_ID_VSOCK		19 /* virtio vsock transport */
 
-static struct virtio_device virtio_vsock;
-static uint64_t cid;
-static struct virtqueue *tx_vq, *rx_vq, *event_vq;
-
 struct virtio_vsock_hdr {
 	__le64	src_cid;
 	__le64	dst_cid;
@@ -34,6 +30,11 @@ struct virtio_vsock_pkt {
 	void *buf;
 };
 
+static struct virtio_device virtio_vsock;
+static uint64_t cid;
+static struct virtqueue *tx_vq, *rx_vq, *event_vq;
+static tid_t vsock_tid;
+
 static void get_cid(void)
 {
 	virtio_vsock.get(&virtio_vsock, 0, (u8 *)&cid, sizeof(cid));
@@ -47,7 +48,7 @@ static void tx_vq_callback(struct virtqueue *vq)
 
 static void rx_vq_callback(struct virtqueue *vq)
 {
-
+	wakeup_task(vsock_tid);
 }
 
 static void event_vq_callback(struct virtqueue *vq)
@@ -57,8 +58,6 @@ static void event_vq_callback(struct virtqueue *vq)
 static void virtio_vsock_handler(struct state *s)
 {
 	uint8_t isr;
-
-	LOG_INFO("virtio_vsock_handler\n");
 
 	/* reading the ISR has the effect of also clearing it so it's very
 	 * important to save off the value. */
@@ -108,11 +107,13 @@ out:
 }
 
 int
-virtio_vsock_init(void)
+virtio_vsock_init(tid_t tid)
 {
 	int ret;
 	pci_info_t pci_info;
 	bool is_legacy;
+
+	vsock_tid = tid;
 
 	ret = virtio_device_find(&pci_info, &is_legacy, VENDOR_ID, VIRTIO_ID_VSOCK);
 	if (ret)

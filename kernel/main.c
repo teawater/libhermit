@@ -328,21 +328,33 @@ int libc_start(int argc, char** argv, char** env);
 char* itoa(uint64_t input, char* str);
 
 #ifdef KATA
+extern int virtio_console_init(void);
+
+extern int virtio_vsock_init(tid_t tid);
+
 static int initd(void* arg)
 {
+	int ret;
+
 	// initialized bss section
 	memset((void*)&__bss_start, 0x00, (size_t) &kernel_start + image_size - (size_t) &__bss_start);
 
 	LOG_INFO("KATA is running\n");
 
-//#if 0
-	for (int i = 0; 1; i++) {
-		LOG_INFO("KATA is running %d\n", i);
-		timer_wait(999999 * TIMER_FREQ);
+	ret = virtio_vsock_init(per_core(current_task)->id);
+	if (ret) {
+		LOG_INFO("vsock init failed %d\n", ret);
+		goto out;
 	}
-//#endif
 
-	return 0;
+	while(1) {
+		block_current_task();
+		reschedule();
+		LOG_INFO("get vsock package\n");
+	}
+
+out:
+	return ret;
 }
 #else
 // init task => creates all other tasks and initializes the LwIP
@@ -672,31 +684,6 @@ static int measure_context(void* arg)
 }
 #endif
 
-#ifdef KATA
-extern int virtio_console_init(void);
-
-extern int virtio_vsock_init(void);
-
-static int
-virtio_init(void)
-{
-	int ret;
-
-	ret = virtio_console_init();
-	if (ret)
-		goto out;
-
-	ret = virtio_vsock_init();
-	if (ret) {
-		LOG_INFO("vsock init failed %d\n", ret);
-		goto out;
-	}
-
-out:
-	return ret;
-}
-#endif
-
 int hermit_main(void)
 {
 	hermit_init();
@@ -704,7 +691,7 @@ int hermit_main(void)
 
 #ifdef KATA
 	// Call after system_calibration because system_calibration does some cr3 init work.
-	if (virtio_init() != 0) {
+	if (virtio_console_init() != 0) {
 		while(1)
 			HALT;
 	}
