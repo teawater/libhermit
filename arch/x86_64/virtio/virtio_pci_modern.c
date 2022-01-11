@@ -467,6 +467,11 @@ static void vp_get(struct virtio_device *vdev, unsigned offset,
 	}
 }
 
+static u8 vp_get_isr(struct virtio_device *vdev)
+{
+	return readb(vdev->isr);
+}
+
 #define CONFIG_X86_L1_CACHE_SHIFT 6
 #define L1_CACHE_SHIFT	(CONFIG_X86_L1_CACHE_SHIFT)
 #define L1_CACHE_BYTES	(1 << L1_CACHE_SHIFT)
@@ -534,7 +539,7 @@ int
 virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 {
 	int ret = -ENXIO;
-	int common, notify, device, modern_bars = 0;
+	int common, notify, device, isr, modern_bars = 0;
 	u32 notify_length;
 	u32 notify_offset;
 
@@ -556,6 +561,12 @@ virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 	if (!device)
 		goto out;
 
+	isr = virtio_pci_find_capability(pci_info, VIRTIO_PCI_CAP_ISR_CFG,
+					 IORESOURCE_IO | IORESOURCE_MEM,
+					 &modern_bars);
+	if (!isr)
+		goto out;
+
 	vdev->cfg = vp_modern_map_capability(pci_info, common,
 					     sizeof(struct virtio_pci_common_cfg),
 					     4, 0,
@@ -568,6 +579,11 @@ virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 						0, 4, 0, PAGE_SIZE,
 						&vdev->device_len);
 	if (!vdev->device)
+		goto out;
+
+	vdev->isr = vp_modern_map_capability(pci_info, isr,
+					     sizeof(u8), 1, 0, 1, NULL);
+	if (!vdev->isr)
 		goto out;
 
 	/* Read notify_off_multiplier from config space. */
@@ -606,6 +622,7 @@ virtio_pci_modern_init(struct virtio_device *vdev, pci_info_t* pci_info)
 	vdev->get_features = vp_get_features;
 	vdev->set_features = vp_set_features;
 	vdev->get = vp_get;
+	vdev->get_isr = vp_get_isr;
 	vdev->setup_vq = vp_setup_vq;
 
 	ret = 0;

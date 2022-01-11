@@ -42,6 +42,11 @@ static void vp_get(struct virtio_device *vdev, unsigned offset,
 		buf[i] = inportb(ioaddr + i);
 }
 
+static u8 vp_get_isr(struct virtio_device *vdev)
+{
+	return inportb(vdev->iobase + VIRTIO_PCI_ISR);
+}
+
 static struct virtqueue *
 vp_setup_vq(pci_info_t* pci_info,
 	    struct virtio_device *vdev,
@@ -87,5 +92,6 @@ virtio_pci_legacy_init(struct virtio_device *vdev, pci_info_t* pci_info)
 	vdev->get_features = vp_get_features;
 	vdev->set_features = vp_set_features;
 	vdev->get = vp_get;
+	vdev->get_isr = vp_get_isr;
 	vdev->setup_vq = vp_setup_vq;
 }

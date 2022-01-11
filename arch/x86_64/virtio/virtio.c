@@ -102,6 +102,7 @@ virtio_device_find(pci_info_t *pci_info, bool *is_legacy, uint32_t vendor_id, ui
 		if (pci_get_device_info(vendor_id, i,
 					 device_id << 16 | vendor_id,
 					 pci_info, 1, true) == 0) {
+			// XXX
 			//*is_legacy = false;
 			//pci_modern_init(pci_info);
 			*is_legacy = true;
