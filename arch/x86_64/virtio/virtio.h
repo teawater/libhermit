@@ -366,9 +366,11 @@ extern int virtqueue_add_outbuf(struct virtqueue *vq,
 extern bool virtqueue_kick(struct virtqueue *vq);
 extern void *virtqueue_get_buf(struct virtqueue *vq, unsigned int *len);
 extern bool virtqueue_is_broken(struct virtqueue *vq);
-unsigned int virtqueue_get_vring_size(struct virtqueue *_vq);
-dma_addr_t virtqueue_get_avail_addr(struct virtqueue *_vq);
-dma_addr_t virtqueue_get_used_addr(struct virtqueue *_vq);
+extern unsigned int virtqueue_get_vring_size(struct virtqueue *_vq);
+extern dma_addr_t virtqueue_get_avail_addr(struct virtqueue *_vq);
+extern dma_addr_t virtqueue_get_used_addr(struct virtqueue *_vq);
+extern void virtqueue_disable_cb(struct virtqueue *_vq);
+extern bool virtqueue_enable_cb(struct virtqueue *_vq);
 
 extern int virtio_device_find(pci_info_t *pci_info, bool *is_legacy, uint32_t vendor_id,
 			      uint32_t device_id);

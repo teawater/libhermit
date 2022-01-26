@@ -161,3 +161,23 @@ virtio_vsock_init(tid_t tid)
 out:
 	return ret;
 }
+
+int
+vsock_recv_handler()
+{
+	do {
+		virtqueue_disable_cb(rx_vq);
+		while(1) {
+			struct virtio_vsock_pkt *pkt;
+			unsigned int len;
+
+			pkt = virtqueue_get_buf(rx_vq, &len);
+			if (!pkt) {
+				break;
+			}
+			LOG_INFO("get vsock package %d\n", pkt->hdr.len);
+		}
+	} while (!virtqueue_enable_cb(rx_vq));
+
+	return 0;
+}

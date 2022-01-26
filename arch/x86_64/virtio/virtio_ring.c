@@ -825,3 +825,92 @@ dma_addr_t virtqueue_get_used_addr(struct virtqueue *_vq)
 	return vq->split.queue_dma_addr +
 		((char *)vq->split.vring.used - (char *)vq->split.vring.desc);
 }
+
+static void virtqueue_disable_cb_split(struct virtqueue *_vq)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	if (!(vq->split.avail_flags_shadow & VRING_AVAIL_F_NO_INTERRUPT)) {
+		vq->split.avail_flags_shadow |= VRING_AVAIL_F_NO_INTERRUPT;
+		if (vq->event)
+			/* TODO: this is a hack. Figure out a cleaner value to write. */
+			vring_used_event(&vq->split.vring) = 0x0;
+		else
+			vq->split.vring.avail->flags =
+				cpu_to_virtio16(_vq->vdev,
+						vq->split.avail_flags_shadow);
+	}
+}
+
+void virtqueue_disable_cb(struct virtqueue *_vq)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	/* If device triggered an event already it won't trigger one again:
+	 * no need to disable.
+	 */
+	if (vq->event_triggered)
+		return;
+	virtqueue_disable_cb_split(_vq);
+}
+
+static unsigned virtqueue_enable_cb_prepare_split(struct virtqueue *_vq)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+	u16 last_used_idx;
+
+	START_USE(vq);
+
+	/* We optimistically turn back on interrupts, then check if there was
+	 * more to do. */
+	/* Depending on the VIRTIO_RING_F_EVENT_IDX feature, we need to
+	 * either clear the flags bit or point the event index at the next
+	 * entry. Always do both to keep code simple. */
+	if (vq->split.avail_flags_shadow & VRING_AVAIL_F_NO_INTERRUPT) {
+		vq->split.avail_flags_shadow &= ~VRING_AVAIL_F_NO_INTERRUPT;
+		if (!vq->event)
+			vq->split.vring.avail->flags =
+				cpu_to_virtio16(_vq->vdev,
+						vq->split.avail_flags_shadow);
+	}
+	vring_used_event(&vq->split.vring) = cpu_to_virtio16(_vq->vdev,
+			last_used_idx = vq->last_used_idx);
+	END_USE(vq);
+	return last_used_idx;
+}
+
+static bool virtqueue_poll_split(struct virtqueue *_vq, unsigned last_used_idx)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	return (u16)last_used_idx != virtio16_to_cpu(_vq->vdev,
+			vq->split.vring.used->idx);
+}
+
+static unsigned virtqueue_enable_cb_prepare(struct virtqueue *_vq)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	if (vq->event_triggered)
+		vq->event_triggered = false;
+
+	return virtqueue_enable_cb_prepare_split(_vq);
+}
+
+bool virtqueue_poll(struct virtqueue *_vq, unsigned last_used_idx)
+{
+	struct vring_virtqueue *vq = to_vvq(_vq);
+
+	if (unlikely(vq->broken))
+		return false;
+
+	virtio_mb(vq->weak_barriers);
+	return virtqueue_poll_split(_vq, last_used_idx);
+}
+
+bool virtqueue_enable_cb(struct virtqueue *_vq)
+{
+	unsigned last_used_idx = virtqueue_enable_cb_prepare(_vq);
+
+	return !virtqueue_poll(_vq, last_used_idx);
+}

@@ -351,6 +351,7 @@ static int initd(void* arg)
 		block_current_task();
 		reschedule();
 		LOG_INFO("get vsock package\n");
+		vsock_recv_handler();
 	}
 
 out:
