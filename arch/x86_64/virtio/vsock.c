@@ -28,6 +28,7 @@ enum {
 struct virtio_vsock_pkt {
 	struct virtio_vsock_hdr	hdr;
 	void *buf;
+	unsigned int len;
 };
 
 static struct virtio_device virtio_vsock;
@@ -162,7 +163,95 @@ out:
 	return ret;
 }
 
-int
+enum virtio_vsock_type {
+	VIRTIO_VSOCK_TYPE_STREAM = 1,
+};
+
+enum virtio_vsock_op {
+	VIRTIO_VSOCK_OP_INVALID = 0,
+
+	/* Connect operations */
+	VIRTIO_VSOCK_OP_REQUEST = 1,
+	VIRTIO_VSOCK_OP_RESPONSE = 2,
+	VIRTIO_VSOCK_OP_RST = 3,
+	VIRTIO_VSOCK_OP_SHUTDOWN = 4,
+
+	/* To send payload */
+	VIRTIO_VSOCK_OP_RW = 5,
+
+	/* Tell the peer our credit info */
+	VIRTIO_VSOCK_OP_CREDIT_UPDATE = 6,
+	/* Request the peer to send the credit info to us */
+	VIRTIO_VSOCK_OP_CREDIT_REQUEST = 7,
+};
+
+static int
+vsock_pkt_send(struct virtio_vsock_pkt *pkt)
+{
+	int out_sg = 0, ret;
+	struct scatterlist hdr, buf, *sgs[2];
+
+	sg_init_one(&hdr, &pkt->hdr, sizeof(pkt->hdr));
+	sgs[out_sg++] = &hdr;
+	if (pkt->len) {
+		sg_init_one(&buf, pkt->buf, pkt->len);
+		sgs[out_sg++] = &buf;
+	}
+
+	ret = virtqueue_add_split(tx_vq, sgs, out_sg, out_sg, 0, NULL, NULL);
+	if (ret != 0)
+		goto out;
+	
+	virtqueue_kick(tx_vq);
+
+out:
+	return ret;
+}
+
+static void
+vsock_pkt_send_rst(struct virtio_vsock_pkt *pkt)
+{
+	u16 type;
+	u64 src_cid, dst_cid;
+	u32 src_port, dst_port;
+	int ret;
+
+	if (pkt->hdr.op == VIRTIO_VSOCK_OP_RST)
+		return;
+
+	type = pkt->hdr.type;
+	src_cid	= pkt->hdr.dst_cid;
+	dst_cid = pkt->hdr.src_cid;
+	src_port= pkt->hdr.dst_port;
+	dst_port = pkt->hdr.src_port;
+
+	memset(&pkt->hdr, 0, sizeof(pkt->hdr));
+	pkt->hdr.type		= type;
+	pkt->hdr.op		= VIRTIO_VSOCK_OP_RST;
+	pkt->hdr.src_cid	= src_cid;
+	pkt->hdr.src_port	= src_port;
+	pkt->hdr.dst_cid	= dst_cid;
+	pkt->hdr.dst_port	= dst_port;
+
+	pkt->len = 0;
+
+	ret = vsock_pkt_send(pkt);
+	if (ret)
+		LOG_ERROR("send vsock package get %d\n", ret);
+}
+
+static void
+vsock_pkt_recv(struct virtio_vsock_pkt *pkt)
+{
+	if (pkt->hdr.type != VIRTIO_VSOCK_TYPE_STREAM) {
+		LOG_ERROR("get vsock package type %u is not support\n", pkt->hdr.type);
+		vsock_pkt_send_rst(pkt);
+		return;
+	}
+	vsock_pkt_send_rst(pkt);
+}
+
+void
 vsock_recv_handler()
 {
 	do {
@@ -175,9 +264,9 @@ vsock_recv_handler()
 			if (!pkt) {
 				break;
 			}
-			LOG_INFO("get vsock package %d\n", pkt->hdr.len);
+			pkt->len = len - sizeof(pkt->hdr);
+			LOG_INFO("get vsock package len %d\n", pkt->len);
+			vsock_pkt_recv(pkt);
 		}
 	} while (!virtqueue_enable_cb(rx_vq));
-
-	return 0;
 }
